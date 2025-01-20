@@ -79,3 +79,48 @@ figure7(b, w, bs, ws, all_losses)
 
 # Visualizing gradients - zooming in
 figure8(b, w, bs, ws, all_losses)
+
+## Backpropagation
+# Update the parameters
+lr = .1
+print("B BEFORE: " + str(b) + "; W BEFORE: " + str(w))
+b = b - lr * b_grad
+w = w - lr * w_grad 
+print("B AFTER: " + str(b) + "; W AFTER: " + str(w))
+figure9(x_train, y_train, b, w)
+manual_grad_b = -2.9
+manual_grad_w = -1.79
+np.random.seed(42)
+b_initial = np.random.randn(1)
+w_initial = np.random.randn(1)
+lr = .2
+figure10(b_initial, w_initial, bs, ws, all_losses, manual_grad_b, manual_grad_w, lr)
+lr = 1.1 # too high learning rate
+figure10(b_initial, w_initial, bs, ws, all_losses, manual_grad_b, manual_grad_w, lr)
+
+# Normalization necessity illustration
+true_b = 1
+true_w = 2
+N = 100
+np.random.seed(42)
+bad_w = true_w / 10 
+bad_x = np.random.rand(N, 1) * 10 
+y = true_b + bad_w * bad_x + (.1 * np.random.randn(N, 1)) # more or less will be the same even with bad samples
+bad_x_train, y_train = bad_x[train_idx], y[train_idx]
+bad_x_val, y_val = bad_x[val_idx], y[val_idx]
+fig, ax = plt.subplots(1, 2, figsize=(12, 6))
+ax[0].scatter(x_train, y_train)
+ax[0].set_xlabel('x')
+ax[0].set_ylabel('y')
+ax[0].set_ylim([0, 3.1])
+ax[0].set_title('Train  - Original')
+ax[1].scatter(bad_x_train, y_train, c='k')
+ax[1].set_xlabel('x')
+ax[1].set_ylabel('y')
+ax[1].set_ylim([0, 3.1])
+ax[1].set_title('Train - "Bad"')
+fig.tight_layout()
+bad_b_range = np.linspace(-2, 4, 101)
+bad_w_range = np.linspace(-2.8, 3.2, 101)
+bad_bs, bad_ws = np.meshgrid(bad_b_range, bad_w_range)
+figure14(x_train, y_train, b_initial, w_initial, bad_bs, bad_ws, bad_x_train)

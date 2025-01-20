@@ -203,7 +203,8 @@ def calc_gradient(parm_before, parm_after, loss_before, loss_after):
     delta_loss = loss_after - loss_before
     manual_grad = delta_loss / delta_parm 
     return manual_grad, delta_parm, delta_loss
-    
+
+# Calculate gradient of MSE over w/b based on dw=0.12; db=0.12
 def figure8(b, w, bs, ws, all_losses):
     b_range = bs[0, :]
     w_range = ws[:, 0]
@@ -213,6 +214,7 @@ def figure8(b, w, bs, ws, all_losses):
     manual_grad_b, delta_b, delta_mse_b = calc_gradient(bs_before, bs_after, loss_before, loss_after_b)
     manual_grad_w, delta_w, delta_mse_w = calc_gradient(ws_before, ws_after, loss_before, loss_after_w)
     fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+    ## Left plot: MSE loss vs. w (b fixed) 
     axs[0].set_ylim([2.3, 2.8])
     axs[0].set_xlim([-.3, .2])
     axs[0].set_xlabel('w')
@@ -226,5 +228,105 @@ def figure8(b, w, bs, ws, all_losses):
     axs[0].arrow(ws_before, loss_after_w, 0, -.01, color='r', shape='full', lw=0, length_includes_head=True, head_width=.01)
     axs[0].plot([ws_before, ws_after], [loss_before, loss_before], 'r-', linewidth=1.5)
     axs[0].plot([ws_before, ws_before], [loss_after_w, loss_before], 'r-', linewidth=1.5)
+    # annotation: r'...' means treating backslashes dollar (e.g. $\delta$) as escape characters
+    axs[0].annotate(r'$\delta w = {:.2f}$'.format(delta_w), xy=(.0, 2.7), c='k', fontsize=15)
+    axs[0].annotate(r'$\delta MSE = {:.2f}$'.format(delta_mse_w), xy=(-.23, 2.45), c='k', fontsize=15)
+    axs[0].annotate(r'$\frac{\delta MSE}{\delta w} \approx' + '{:.2f}$'.format(manual_grad_w), xy=(-.05, 2.6), c='k', fontsize=17)
+    
+    ## Right plot: MSE loss vs. b (w fixed)
+    axs[1].set_ylim([2.3, 2.8])
+    axs[1].set_xlim([.3, .8])
+    axs[1].set_xlabel('b')
+    axs[1].set_ylabel('MSE (loss)')
+    axs[1].set_title('Fixed: w = {:.2f}'.format(ws_before))
+    axs[1].plot(b_range, loss_fixedw, c='k', linestyle='--', linewidth=2)
+    axs[1].plot([bs_before], [loss_before], 'ok')
+    axs[1].plot([bs_after], [loss_after_b], 'ok')
+    axs[1].arrow(bs_after, loss_before, .01, 0, color='k', shape='full', lw=0, length_includes_head=True, head_width=.01)
+    axs[1].arrow(bs_before, loss_after_b, 0, -.01, color='k', shape='full', lw=0, length_includes_head=True, head_width=.01)
+    axs[1].plot([bs_before, bs_after], [loss_before, loss_before], 'k-', linewidth=1.5)
+    axs[1].plot([bs_before, bs_before], [loss_after_b, loss_before], 'k-', linewidth=1.5)
+    axs[1].annotate(r'$\delta b = {:.2f}$'.format(delta_b), xy=(.67, 2.7), c='k', fontsize=15)
+    axs[1].annotate(r'$\delta MSE = {:.2f}$'.format(delta_mse_b), xy=(.45, 2.32), c='k', fontsize=15)
+    axs[1].annotate(r'$\frac{\delta MSE}{\delta b} \approx' + '{:.2f}$'.format(manual_grad_b), xy=(.62, 2.6), c='k', fontsize=17)
+    axs[1].label_outer()
+    fig.tight_layout()
     
     return fig, axs
+
+# Scatter plot of training data points and regression lines before & after backpropagation
+def figure9(x_train, y_train, b, w):
+    # b and w have been updated; hence we generate the old ones
+    np.random.seed(42)
+    b_initial = np.random.randn(1)
+    w_initial = np.random.randn(1)
+    fig, ax = figure2(x_train, y_train, b_initial, w_initial)
+    # after backpropagation
+    x_range = np.linspace(0, 1, 101)
+    yhat_range = b + w * x_range 
+    ax.plot(x_range, yhat_range, label='Using parameters\nafter one update', c='g', linestyle='--')
+    ax.annotate('b = {:.4f} w = {:.4f}'.format(b[0], w[0]), xy=(.2, .95), c='g')
+    fig.tight_layout()
+    return fig, ax
+
+def figure10(b, w, bs, ws, all_losses, manual_grad_b, manual_grad_w, lr):
+    b_range = bs[0, :]
+    w_range = ws[:, 0]
+    b_idx, w_idx, bs_before, ws_before = find_index(b, w, bs, ws)
+    new_b_idx, new_w_idx, bs_after, ws_after = find_index(
+        bs_before - lr * manual_grad_b,
+        ws_before - lr * manual_grad_w,
+        bs, 
+        ws
+    )
+    loss_before = all_losses[w_idx, b_idx]
+    loss_fixedb = all_losses[:, b_idx]
+    loss_fixedw = all_losses[w_idx, :]
+    loss_after_b = all_losses[w_idx, new_b_idx]
+    loss_after_w = all_losses[new_w_idx, b_idx]
+    fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+    # Loss curve for w, given fixed b
+    axs[0].set_ylim([-.1, 6.1])
+    axs[0].set_xlabel('w')
+    axs[0].set_ylabel('MSE (loss)')
+    axs[0].set_title('Fixed: b = {:.2f}'.format(bs_before))
+    axs[0].plot(w_range, loss_fixedb, c='r', linestyle='--', linewidth=2)
+    axs[0].plot([ws_before], [loss_before], 'or')
+    axs[0].arrow(ws_after, loss_before, .1, 0, color='r', shape='full', lw=0, length_includes_head=True, head_width=.1)
+    axs[0].plot([ws_before, ws_after], [loss_before, loss_before], 'r-', linewidth=1.5)
+    axs[0].plot([ws_after], [loss_after_w], 'or')
+    axs[0].annotate(r'$\eta = {:.2f}$'.format(lr), xy=(1.6, 5.5), c='k', fontsize=17)
+    axs[0].annotate(r'$-\eta \frac{\delta MSE}{\delta w} \approx$' + '{:.2f}'.format(-lr * manual_grad_w), xy=(1,2), c='k', fontsize=17)
+    # loss curve for b, given fixed w
+    axs[1].set_ylim([-.1, 6.1])
+    axs[1].set_xlabel('b')
+    axs[1].set_ylabel('MSE (loss)')
+    axs[1].set_title('Fixed: w = {:.2f}'.format(ws_before))
+    axs[1].label_outer()
+    axs[1].plot(b_range, loss_fixedw, c='k', linestyle='--', linewidth=2)
+    axs[1].plot([bs_before], [loss_before], 'ok')
+    axs[1].arrow(bs_after, loss_before, .1, 0, color='k', shape='full', lw=0, length_includes_head=True, head_width=.1)
+    axs[1].plot([bs_before, bs_after], [loss_before, loss_before], 'k-', linewidth=1.5)
+    axs[1].plot([bs_after], [loss_after_b], 'ok')
+    axs[1].annotate(r'$\eta = {:.2f}$'.format(lr), xy=(.6, 5.5), c='k', fontsize=17)
+    axs[1].annotate(r'$-\eta \frac{\delta MSE}{\delta b} \approx' + '{:.2f}$'.format(-lr * manual_grad_b), xy=(1, 2), c='k', fontsize=17)
+    fig.tight_layout()
+    return fig, axs
+
+# x_train: [N,1]; y_train: [N,1], bad_x_train: [N,1]
+def figure14(x_train, y_train, b, w, bad_bs, bad_ws, bad_x_train):
+    bad_b_range = bad_bs[0, :]
+    bad_w_range = bad_ws[:, 0]
+    all_predictions = np.apply_along_axis(func1d=lambda x: bad_bs + bad_ws * x, axis=1, arr=x_train) # all_predictions [N,101,101]
+    all_errors = all_predictions - y_train.reshape(-1, 1, 1) # y_train: [N,1,1]
+    all_losses = (all_errors**2).mean(axis=0)
+    bad_all_predictions = np.apply_along_axis(func1d=lambda x: bad_bs+bad_ws*x, axis=1, arr=bad_x_train) # bad_all_predictions [N,101,101]
+    bad_all_errors = (bad_all_predictions - y_train.reshape(-1, 1, 1)) # y_train: [N,1,1]
+    bad_all_losses = (bad_all_errors**2).mean(axis=0)
+    b_idx, w_idx, fixedb, fixedw = find_index(b, w, bad_bs, bad_ws)
+    b_minimum, w_minimum = fit_model(x_train, y_train)
+    bad_b_minimum, bad_w_minimum = fit_model(bad_x_train, y_train)
+    fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+    
+    print(all_predictions.shape)
+    
