@@ -314,6 +314,7 @@ def figure10(b, w, bs, ws, all_losses, manual_grad_b, manual_grad_w, lr):
     return fig, axs
 
 # x_train: [N,1]; y_train: [N,1], bad_x_train: [N,1]
+# b,w: initial random point
 def figure14(x_train, y_train, b, w, bad_bs, bad_ws, bad_x_train):
     bad_b_range = bad_bs[0, :]
     bad_w_range = bad_ws[:, 0]
@@ -327,6 +328,67 @@ def figure14(x_train, y_train, b, w, bad_bs, bad_ws, bad_x_train):
     b_minimum, w_minimum = fit_model(x_train, y_train)
     bad_b_minimum, bad_w_minimum = fit_model(bad_x_train, y_train)
     fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+    axs[0].set_xlabel('b')
+    axs[0].set_ylabel('w')
+    axs[0].set_title('Loss Surface - Before')
+    CS = axs[0].contour(bad_bs[0,:], bad_ws[:,0], all_losses, cmap=plt.cm.jet)
+    axs[0].clabel(CS, inline=1, fontsize=10)
+    axs[0].scatter(b_minimum, w_minimum, c='k')
+    axs[0].scatter(fixedb, fixedw, c='k')
+    axs[0].plot([fixedb, fixedb], bad_w_range[[0,-1]], linestyle='--', c='r', linewidth=2)
+    axs[0].plot(bad_b_range[[0, -1]], [fixedw, fixedw], linestyle='--', c='k', linewidth=2)
+    axs[0].annotate('Minimum', xy=(.5, 1.5), c='k')
+    axs[0].annotate('Random Start', xy=(fixedb-.6, fixedw-.3), c='k')
     
-    print(all_predictions.shape)
+    axs[1].set_xlabel('b')
+    axs[1].set_ylabel('w')
+    axs[1].set_title('Loss Surface - After')
+    CS = axs[1].contour(bad_bs[0,:], bad_ws[:,0], bad_all_losses, cmap=plt.cm.jet)
+    axs[1].clabel(CS, inline=1, fontsize=10)
+    axs[1].scatter(bad_b_minimum, bad_w_minimum, c='k')
+    axs[1].scatter(fixedb, fixedw, c='k')
+    axs[1].plot([fixedb, fixedb], bad_w_range[[0,-1]], linestyle='--', c='r', linewidth=2)
+    axs[1].plot(bad_b_range[[0,-1]], [fixedw, fixedw], linestyle='--', c='k', linewidth=2)
+    axs[1].annotate('Minimum', xy=(.5, .35), c='k')
+    axs[1].annotate('Random Start', xy=(fixedb-.6, fixedw-.3), c='k')
+    fig.tight_layout()
+    return fig, axs
+    
+def figure15(x_train, y_train, b, w, bad_bs, bad_ws, bad_x_train):
+    bad_b_range = bad_bs[0,:]
+    bad_w_range = bad_ws[:,0]
+    all_predictions = np.apply_along_axis(func1d=lambda x: bad_bs+bad_ws*x, axis=1, arr=x_train) # [N,101,101]
+    all_errors = (all_predictions - y_train.reshape(-1,1,1)) # [N,1]->[N,1,1]
+    all_losses = (all_errors**2).mean(axis=0)
+    bad_all_predictions = np.apply_along_axis(func1d=lambda x: bad_bs+bad_ws*x, axis=1, arr=bad_x_train)
+    bad_all_errors = (bad_all_predictions - y_train.reshape(-1,1,1)) # [N,1]->[N,1,1]
+    bad_all_losses = (bad_all_errors**2).mean(axis=0)
+    b_idx, w_idx, fixedb, fixedw = find_index(b, w, bad_bs, bad_ws)
+    fig, axs = plt.subplots(1, 2, figsize=(12,6))
+    
+    # Left: fixing b=0.52, w varies
+    axs[0].set_ylim([-.1, 15.1])
+    axs[0].set_xlim([-1, 3.2])
+    axs[0].set_xlabel('w')
+    axs[0].set_ylabel('Loss')
+    axs[0].set_title('Fixed: b={:.2f}'.format(fixedb))
+    axs[0].plot(bad_w_range, all_losses[:, b_idx], c='r', linestyle='--', linewidth=1, label='Before')
+    axs[0].plot([fixedw], [all_losses[w_idx, b_idx]], 'or')
+    axs[0].plot(bad_w_range, bad_all_losses[:, b_idx], c='r', linestyle='--', linewidth=2, label='After')
+    axs[0].plot([fixedw], [bad_all_losses[w_idx, b_idx]], 'or')
+    axs[0].legend()
+    
+    # Right: fixing w=0.16, b varies
+    axs[1].set_ylim([-.1, 15.1])
+    axs[1].set_xlabel('b')
+    axs[1].set_ylabel('Loss')
+    axs[1].set_title('Fixed: w={:.2f}'.format(fixedw))
+    axs[1].plot(bad_b_range, all_losses[w_idx,:], c='k', linestyle='--', linewidth=1, label='Before')
+    axs[1].plot([fixedb], [all_losses[w_idx, b_idx]], 'ok')
+    axs[1].plot(bad_b_range, bad_all_losses[w_idx,:], c='k', linestyle='--', linewidth=2, label='After')
+    axs[1].plot([fixedb], [bad_all_losses[w_idx, b_idx]], 'ok')
+    axs[1].legend()
+    
+    fig.tight_layout()
+    return fig, axs
     

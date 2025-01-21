@@ -124,3 +124,12 @@ bad_b_range = np.linspace(-2, 4, 101)
 bad_w_range = np.linspace(-2.8, 3.2, 101)
 bad_bs, bad_ws = np.meshgrid(bad_b_range, bad_w_range)
 figure14(x_train, y_train, b_initial, w_initial, bad_bs, bad_ws, bad_x_train)
+figure15(x_train, y_train, b_initial, w_initial, bad_bs, bad_ws, bad_x_train)
+
+# Normalization/ standardization
+scaler = StandardScaler(with_mean=True, with_std=True)
+scaler.fit(x_train)
+scaled_x_train = scaler.transform(x_train)
+scaled_x_val = scaler.transform(x_val)
+fig, ax = plt.subplots(1, 3, figsize=(15,6))
+ax[0].scatter(x_train, y_train, c='b')
