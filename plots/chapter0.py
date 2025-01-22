@@ -391,4 +391,20 @@ def figure15(x_train, y_train, b, w, bad_bs, bad_ws, bad_x_train):
     
     fig.tight_layout()
     return fig, axs
+
+def figure17(x_train, y_train, scaled_bs, scaled_ws, bad_x_train, scaled_x_train):
+    # original loss
+    all_predictions = np.apply_along_axis(func1d=lambda x: scaled_bs + scaled_ws * x, axis=1, arr=x_train) # [N, 101, 101]
+    all_errors = (all_predictions - y_train.reshape(-1,1,1)) # y_train: [N,1,1] -> all_errors: [N,101,101]
+    all_losses = (all_errors**2).mean(axis=0) # [101,101]
+    # loss with x10 x-values (/10 w_values)
+    bad_all_predictions = np.apply_along_axis(func1d = lambda x: scaled_bs+scaled_ws*x, axis=1, arr=bad_x_train)
+    bad_all_errors = (bad_all_predictions - y_train.reshape(-1,1,1))
+    bad_all_losses = (bad_all_errors**2).mean(axis=0)
+    # loss with standard scaler applied
+    scaled_all_predictions = np.apply_along_axis(func1d=lambda x: scaled_bs+scaled_ws*x, axis=1, arr=scaled_x_train)
+    scaled_all_errors = (scaled_all_predictions - y_train.reshape(-1,1,1))
+    scaled_all_losses = (scaled_all_errors**2).mean(axis=0)
     
+    b_minimum, w_minimum = fit_model(x_train, y_train)
+    bad_b_minimum, bad_w_minimum = 

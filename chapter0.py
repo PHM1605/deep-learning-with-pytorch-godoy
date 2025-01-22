@@ -18,18 +18,17 @@ train_idx = idx[:int(N*0.8)]
 val_idx = idx[int(N*.8):]
 x_train, y_train = x[train_idx], y[train_idx]
 x_val, y_val = x[val_idx], y[val_idx]
-figure1(x_train, y_train, x_val, y_val)
-print(x_train)
+# figure1(x_train, y_train, x_val, y_val)
 
 # init values for b and w gues
 np.random.seed(42)
 b = np.random.randn(1)
 w = np.random.randn(1)
 yhat = b + w * x_train
-figure2(x_train, y_train, b, w)
+# figure2(x_train, y_train, b, w)
 
 # Loss of one (first) point
-figure3(x_train, y_train, b, w)
+# figure3(x_train, y_train, b, w)
 
 # Loss of all points
 error = (yhat - y_train)
@@ -62,23 +61,23 @@ all_losses = (all_errors ** 2).mean(axis=0)
 print(all_losses.shape) # [101, 101]
 
 # plot surf 
-figure4(x_train, y_train, b, w, bs, ws, all_losses)
+# figure4(x_train, y_train, b, w, bs, ws, all_losses)
 
 # plot contour when fixing b and varying w
-figure5(x_train, y_train, b, w, bs, ws, all_losses)
+# figure5(x_train, y_train, b, w, bs, ws, all_losses)
 
 # plot contour when fixing w and varying b
-figure6(x_train, y_train, b, w, bs, ws, all_losses)
+# figure6(x_train, y_train, b, w, bs, ws, all_losses)
 
 ## Compute gradients for both b- and w-parameters
 b_grad = 2 * error.mean()
 w_grad = 2 * (x_train * error).mean()
 print("B_GRAD:", b_grad, "; W_GRAD:", w_grad)
 # Visualizing gradients
-figure7(b, w, bs, ws, all_losses)
+# figure7(b, w, bs, ws, all_losses)
 
 # Visualizing gradients - zooming in
-figure8(b, w, bs, ws, all_losses)
+# figure8(b, w, bs, ws, all_losses)
 
 ## Backpropagation
 # Update the parameters
@@ -96,7 +95,7 @@ w_initial = np.random.randn(1)
 lr = .2
 figure10(b_initial, w_initial, bs, ws, all_losses, manual_grad_b, manual_grad_w, lr)
 lr = 1.1 # too high learning rate
-figure10(b_initial, w_initial, bs, ws, all_losses, manual_grad_b, manual_grad_w, lr)
+# figure10(b_initial, w_initial, bs, ws, all_losses, manual_grad_b, manual_grad_w, lr)
 
 # Normalization necessity illustration
 true_b = 1
@@ -123,13 +122,36 @@ fig.tight_layout()
 bad_b_range = np.linspace(-2, 4, 101)
 bad_w_range = np.linspace(-2.8, 3.2, 101)
 bad_bs, bad_ws = np.meshgrid(bad_b_range, bad_w_range)
-figure14(x_train, y_train, b_initial, w_initial, bad_bs, bad_ws, bad_x_train)
-figure15(x_train, y_train, b_initial, w_initial, bad_bs, bad_ws, bad_x_train)
+# figure14(x_train, y_train, b_initial, w_initial, bad_bs, bad_ws, bad_x_train)
+# figure15(x_train, y_train, b_initial, w_initial, bad_bs, bad_ws, bad_x_train)
 
-# Normalization/ standardization
+## Normalization/ standardization
+# Scatter plot
 scaler = StandardScaler(with_mean=True, with_std=True)
 scaler.fit(x_train)
 scaled_x_train = scaler.transform(x_train)
 scaled_x_val = scaler.transform(x_val)
 fig, ax = plt.subplots(1, 3, figsize=(15,6))
 ax[0].scatter(x_train, y_train, c='b')
+ax[0].set_xlabel('x')
+ax[0].set_ylabel('y')
+ax[0].set_ylim([0, 3.1])
+ax[0].set_title('Train - Original')
+ax[1].scatter(bad_x_train, y_train, c='k')
+ax[1].set_xlabel('x')
+ax[1].set_ylabel('y')
+ax[1].set_ylim([0, 3.1])
+ax[1].set_title('Train - "Bad"')
+ax[1].label_outer()
+ax[2].scatter(scaled_x_train, y_train, c='g')
+ax[2].set_xlabel('x')
+ax[2].set_ylabel('y')
+ax[2].set_ylim([0, 3.1])
+ax[2].set_title('Train - Scaled')
+ax[2].label_outer()
+fig.tight_layout()
+# Loss contour
+scaled_b_range = np.linspace(-1, 5, 101)
+scaled_w_range = np.linspace(-2.4, 3.6, 101)
+scaled_bs, scaled_ws = np.meshgrid(scaled_b_range, scaled_w_range)
+figure17(x_train, y_train, scaled_bs, scaled_ws, bad_x_train, scaled_x_train)
