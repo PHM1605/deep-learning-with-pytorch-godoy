@@ -407,4 +407,52 @@ def figure17(x_train, y_train, scaled_bs, scaled_ws, bad_x_train, scaled_x_train
     scaled_all_losses = (scaled_all_errors**2).mean(axis=0)
     
     b_minimum, w_minimum = fit_model(x_train, y_train)
-    bad_b_minimum, bad_w_minimum = 
+    bad_b_minimum, bad_w_minimum = fit_model(bad_x_train, y_train)
+    scaled_b_minimum, scaled_w_minimum = fit_model(scaled_x_train, y_train)
+    
+    fig, axs = plt.subplots(1, 3, figsize=(15,6))
+    
+    # loss surface - original
+    axs[0].set_xlabel('b')
+    axs[0].set_ylabel('w')
+    axs[0].set_title('Loss Surface - Original')
+    CS = axs[0].contour(scaled_bs[0,:], scaled_ws[:,0], all_losses, cmap=plt.cm.jet)
+    axs[0].clabel(CS, inline=1, fontsize=10)
+    axs[0].scatter(b_minimum, w_minimum, c='k')
+    axs[0].annotate('Minimum', xy=(.3, 1.6), c='k')
+    
+    # loss surface - bad
+    axs[1].set_xlabel('b')
+    axs[1].set_ylabel('w')
+    axs[1].set_title('Loss Surface - Bad')
+    CS = axs[1].contour(scaled_bs[0,:], scaled_ws[:,0], bad_all_losses, cmap=plt.cm.jet)
+    axs[1].clabel(CS, inline=1, fontsize=10)
+    axs[1].scatter(bad_b_minimum, bad_w_minimum, c='k')
+    axs[1].annotate('Minimum', xy=(.3, -.25), c='k')
+    
+    # loss surface - scaled
+    axs[2].set_xlabel('b')
+    axs[2].set_ylabel('w')
+    axs[2].set_title('Loss Surface - Scaled')
+    CS = axs[2].contour(scaled_bs[0, :], scaled_ws[:, 0], scaled_all_losses, cmap=plt.cm.jet)
+    axs[2].clabel(CS, inline=1, fontsize=10)
+    axs[2].scatter(scaled_b_minimum, scaled_w_minimum, c='k')
+    axs[2].annotate('Minimum', xy=(1.3, 0.15), c='k')
+    
+    fig.tight_layout()
+    return fig, axs
+
+def figure18(x_train, y_train):
+    b_minimum, w_minimum = fit_model(x_train, y_train)
+    x_range = np.linspace(0, 1, 101)
+    yhat_range = b_minimum + w_minimum * x_range
+    fig, ax = plt.subplots(1, 1, figsize=(6,6))
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    ax.set_ylim([0, 3.1])
+    ax.scatter(x_train, y_train)
+    ax.plot(x_range, yhat_range, label='Final model\'s predictions', c='k', linestyle='--')
+    ax.annotate('b = {:.4f} w = {:.4f}'.format(b_minimum, w_minimum), xy=(.4, 1.5), c='k', rotation=34)
+    ax.legend(loc=0)
+    fig.tight_layout()
+    return fig, ax

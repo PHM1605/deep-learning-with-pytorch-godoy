@@ -87,13 +87,14 @@ b = b - lr * b_grad
 w = w - lr * w_grad 
 print("B AFTER: " + str(b) + "; W AFTER: " + str(w))
 figure9(x_train, y_train, b, w)
+
 manual_grad_b = -2.9
 manual_grad_w = -1.79
 np.random.seed(42)
 b_initial = np.random.randn(1)
 w_initial = np.random.randn(1)
 lr = .2
-figure10(b_initial, w_initial, bs, ws, all_losses, manual_grad_b, manual_grad_w, lr)
+#figure10(b_initial, w_initial, bs, ws, all_losses, manual_grad_b, manual_grad_w, lr)
 lr = 1.1 # too high learning rate
 # figure10(b_initial, w_initial, bs, ws, all_losses, manual_grad_b, manual_grad_w, lr)
 
@@ -155,3 +156,4 @@ scaled_b_range = np.linspace(-1, 5, 101)
 scaled_w_range = np.linspace(-2.4, 3.6, 101)
 scaled_bs, scaled_ws = np.meshgrid(scaled_b_range, scaled_w_range)
 figure17(x_train, y_train, scaled_bs, scaled_ws, bad_x_train, scaled_x_train)
+figure18(x_train, y_train)
