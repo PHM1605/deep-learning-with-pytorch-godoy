@@ -164,3 +164,60 @@ print("loss numpy (cleaner): ", loss.tolist()) # or loss.item() if one element o
 # dot = make_dot(yhat)
 # dot.format = 'png'
 # dot.render('test.png')
+
+# Linear Regression - manual define Parameters
+class ManualLinearRegression(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.b = nn.Parameter(torch.randn(1, requires_grad=True, dtype=torch.float))
+        self.w = nn.Parameter(torch.randn(1, requires_grad=True, dtype=torch.float))
+        
+    def forward(self, x):
+        return self.b + self.w * x 
+torch.manual_seed(42)
+dummy = ManualLinearRegression()
+print("Dummy model params: ", list(dummy.parameters()))
+print("Dummy model state dict: ", dummy.state_dict())
+print("Optimizer state dict: ", optimizer.state_dict())
+lr = 0.1
+model = ManualLinearRegression().to(device)
+optimizer = optim.SGD(model.parameters(), lr=lr)
+loss_fn = nn.MSELoss(reduction='mean')
+n_epochs = 1000
+for epoch in range(n_epochs):
+    model.train() # set model to training mode; turning "dropout" on (otherwise turning off when in "eval" mode)
+    yhat = model(x_train_tensor)
+    loss = loss_fn(yhat, y_train_tensor)
+    loss.backward() # compute gradients for both b and w params
+    optimizer.step() # update params using gradients
+    optimizer.zero_grad() # zeroing gradient 
+print("Model state dict: ", model.state_dict())
+
+# Linear Regression - using nn.Linear
+class MyLinearRegression(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Linear(1, 1)        
+    def forward(self, x):
+        self.linear(x)
+
+dummy = MyLinearRegression().to(device)
+print("nn.Linear Linear Regression params: ", list(dummy.parameters()))
+print("nn.Linear Linear Regression state dict: ", dummy.state_dict())
+    
+# Try using Sequential() - method 1
+model = nn.Sequential(nn.Linear(1, 1))
+print("Sequential state dict: ", model.state_dict())
+# Try using Sequential() - method 2
+model = nn.Sequential()
+model.add_module('layer1', nn.Linear(1, 1))
+model.to(device)
+n_epochs = 1000
+for epoch in range(n_epochs):
+    model.train()
+    yhat = model(x_train_tensor)
+    loss = loss_fn(yhat, y_train_tensor)
+    loss.backward()
+    optimizer.step()
+    optimizer.zero_grad()
+print("Sequential model state dict: ", model.state_dict())
