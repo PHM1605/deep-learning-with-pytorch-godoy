@@ -1,15 +1,8 @@
 import numpy as np
 import datetime 
-import torch
-import torch.optim as optim
-import torch.nn as nn
-import torch.functional as F 
-from torch.utils.data import DataLoader, TensorDataset, random_split 
-from torch.utils.tensorboard import SummaryWriter 
+import torch 
 import matplotlib.pyplot as plt 
-from plots.chapter2_1 import figure1
-
-%matplotlib inline 
+from torch.utils.tensorboard import SummaryWriter 
 plt.style.use('fivethirtyeight')
 
 class StepByStep(object):
@@ -147,31 +140,4 @@ class StepByStep(object):
         if self.train_loader and self.writer:
             x_dummy, y_dummy = next(iter(self.train_loader))
             self.writer.add_graph(self.model, x_dummy.to(self.device)) # add a graph for visualize the structure of model
-
-%run -i data_generation/simple_linear_regression.py
-fig = figure1(x, y)
-%run -i data_preparation/v2.py
-%run -i model_configuration/v4.py
-print("Initial model state dict: ", model.state_dict())
-sbs = StepByStep(model, loss_fn, optimizer)
-sbs.set_loaders(train_loader, val_loader)
-sbs.set_tensorboard('classy')
-print("Created model: ", sbs.model)
-sbs.train(n_epochs=200)
-fig = sbs.plot_losses()
-# prediction
-new_data = np.array([0.5, 0.3, 0.7]).reshape(-1, 1)
-predictions = sbs.predict(new_data)
-print("Predictions: ", predictions)
-# save
-sbs.save_checkpoint('model_checkpoint.pth')
-# create new model and load
-%run -i model_configuration/v4.py 
-new_sbs = StepByStep(model, loss_fn, optimizer)
-new_sbs.load_checkpoint('model_checkpoint.pth')
-print("Loaded model: ", new_sbs.model.state_dict())
-# Train for 50 epochs extra -> 250 epochs total
-new_sbs.set_loaders(train_loader, val_loader)
-new_sbs.train(n_epochs=50)
-fig = new_sbs.plot_losses()
-print("Newly trained model: ", sbs.model.state_dict())
+    
