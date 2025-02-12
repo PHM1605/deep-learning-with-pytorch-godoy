@@ -63,3 +63,16 @@ print("Model state dict: ", model1.state_dict())
 
 # Dummy data points
 dummy_labels = torch.tensor([1.0, 0.0])
+dummy_predictions = torch.tensor([0.9, 0.2])
+# First way
+positive_pred = dummy_predictions[dummy_labels==1]
+first_summation = torch.log(positive_pred).sum()
+negative_pred = dummy_predictions[dummy_labels == 0]
+second_summation = torch.log(1 - negative_pred).sum()
+n_total = dummy_labels.size(0)
+loss = -(first_summation + second_summation) / n_total
+print("Loss (first way): ", loss)
+# Second way - smarter
+summation = torch.sum(dummy_labels*torch.log(dummy_predictions) + (1-dummy_labels)*torch.log(1-dummy_predictions))
+loss = -summation / n_total 
+print("Loss (smart way): ", loss)
