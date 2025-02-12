@@ -76,3 +76,46 @@ print("Loss (first way): ", loss)
 summation = torch.sum(dummy_labels*torch.log(dummy_predictions) + (1-dummy_labels)*torch.log(1-dummy_predictions))
 loss = -summation / n_total 
 print("Loss (smart way): ", loss)
+
+# Binary Cross Entropy With Logits Loss
+loss_fn_logits = nn.BCEWithLogitsLoss(reduction='mean')
+logit1 = log_odds_ratio(0.9)
+logit2 = log_odds_ratio(0.2)
+dummy_labels = torch.tensor([1.0, 0.0])
+dummy_logits = torch.tensor([logit1, logit2]) # [2.2, -1.4])
+loss = loss_fn_logits(dummy_logits, dummy_labels) # 0.16, same as before
+
+# Imbalance dataset - more negative classes
+dummy_imb_labels = torch.tensor([1.0, 0.0, 0.0, 0.0])
+dummy_imb_logits = torch.tensor([logit1, logit2, logit2, logit2])
+n_neg = (dummy_imb_labels==0).sum().float()
+n_pos = (dummy_imb_labels==1).sum().float()
+pos_weight = (n_neg/n_pos).view(1,) # convert from tensor-scalar to tensor-list-of-1-element
+print("Pos weight: ", pos_weight)
+# Loss calculated with library
+loss_fn_imb = nn.BCEWithLogitsLoss(reduction='mean', pos_weight=pos_weight)
+loss = loss_fn_imb(dummy_imb_logits, dummy_imb_labels)
+print("Weighted average loss: ", loss) # 0.25, bigger
+# Loss calculated manually with calculating sum of loss first
+loss_fn_imb_sum = nn.BCEWithLogitsLoss(
+    reduction = 'sum',
+    pos_weight=pos_weight
+    )
+loss = loss_fn_imb_sum(dummy_imb_logits, dummy_imb_labels)
+loss = loss / (pos_weight * n_pos + n_neg) # 0.1643
+print("Weighted average loss - true", loss)
+
+# Model configuration
+lr = 0.1
+torch.manual_seed(42)
+model = nn.Sequential()
+model.add_module('linear', nn.Linear(2,1))
+optimizer = optim.SGD(model.parameters(), lr=lr)
+loss_fn = nn.BCEWithLogitsLoss()
+# Model Training
+n_epochs = 100
+sbs = StepByStep(model, loss_fn, optimizer)
+sbs.set_loaders(train_loader, val_loader)
+sbs.train(n_epochs)
+fig = sbs.plot_losses()
+print("StepByStep model state dict: ", model.state_dict())
