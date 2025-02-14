@@ -119,3 +119,7 @@ sbs.set_loaders(train_loader, val_loader)
 sbs.train(n_epochs)
 fig = sbs.plot_losses()
 print("StepByStep model state dict: ", model.state_dict())
+# Prediction
+predictions = sbs.predict(x_train_tensor[:4]) # output: logits
+probability = sigmoid(predictions)
+print("Probabilities of predictions: ", probability)
