@@ -9,6 +9,9 @@ def odds(prob):
 def log_odds(prob):
     return np.log(odds(prob))
 
+def sigmoid(z):
+    return 1/(1+np.exp(-z))
+
 def figure1(X_train, y_train, X_val, y_val, cm_bright=None):
     if cm_bright is None:
         cm_bright = ListedColormap(['#FF0000', '#0000FF'])
@@ -27,6 +30,102 @@ def figure1(X_train, y_train, X_val, y_val, cm_bright=None):
     ax[1].set_title('Generated Data -Validation')
     fig.tight_layout()
     return fig 
+
+def one_dimension(x, y, colors=None):
+    if colors is None:
+        colors = ['r', 'b']
+    fig, ax = plt.subplots(1, 1, figsize=(10,2))
+    ax.grid(False)
+    ax.set_ylim([-0.1, 0.1])
+    ax.axes.get_yaxis().set_visible(False)
+    ax.plot([-3, 3], [0, 0], linewidth=2, c='k', zorder=1)
+    ax.plot([0, 0], [-0.03, 0.03], c='k', zorder=1)
+    ax.scatter(x[y==1], np.zeros_like(x[y==1]), c=colors[1], s=150, zorder=2, linewidth=3)
+    ax.scatter(x[y==0], np.zeros_like(x[y==0]), c=colors[0], s=150, zorder=2, linewidth=3)
+    ax.set_xlabel(r'$X_1$')
+    ax.set_title('One Dimension')
+    fig.tight_layout()
+    return fig
+
+def two_dimensions(x, y, colors=None):
+    if colors is None:
+        colors = ['r', 'b']
+    x2 = np.concatenate([x.reshape(-1, 1), (x**2).reshape(-1,1)], axis=1)
+    fig = plt.figure(figsize=(10,4.5))
+    gs = fig.add_gridspec(3, 2)
+    # One dimension
+    ax = fig.add_subplot(gs[2,0])
+    ax.grid(False)
+    ax.set_ylim([-0.1, 0.1])
+    ax.axes.get_yaxis().set_visible(False)
+    ax.plot([-3, 3], [0, 0], linewidth=2, c='k', zorder=1)
+    ax.plot([0, 0], [-0.03, 0.03], c='k', zorder=1)
+    ax.scatter(x[y==1], np.zeros_like(x[y==1]), c=colors[1], s=150, zorder=2, linewidth=3)
+    ax.scatter(x[y==0], np.zeros_like(x[y==0]), c=colors[0], s=150, zorder=2, linewidth=3)
+    ax.set_xlabel(r'$X_1$')
+    ax.set_title('One Dimension')
+    # Two dimension
+    ax = fig.add_subplot(gs[:, 1])
+    ax.scatter(*x2[y==1, :].T, c='b', s=150, zorder=2, linewidth=3)
+    ax.scatter(*x2[y==0, :].T, c='r', s=150, zorder=2, linewidth=3)
+    ax.plot([-2, 2], [1, 1], 'k--', linewidth=2)
+    ax.set_xlabel(r'$X_1$')
+    ax.set_ylabel(r'$X_2=X_1^2$')
+    ax.set_title('Two Dimensions')
+    fig.tight_layout()
+    return fig
+
+def probability_contour(ax, model, device, X, y, threshold, cm=None, cm_bright=None):
+    if cm is None:
+        cm = plt.cm.RdBu
+    if cm_bright is None:
+        cm_bright = ListedColormap(['#FF0000', '#0000FF'])
+    h = 0.02 # step size in the mesh
+    x_min, x_max = -2.25, 2.25
+    y_min, y_max = -2.25, 2.25
+    xx, yy = np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
+    logits = model(torch.as_tensor(np.c_[xx.ravel(), yy.ravel()]).float().to(device)) # input: [N, 2]
+    logits = logits.detach().cpu().numpy().reshape(xx.shape)
+    yhat = sigmoid(logits)
+    ax.contour(xx, yy, yhat, levels=[threshold], cmap="Greys", vmin=0, vmax=1)
+    contour = ax.contourf(xx, yy, yhat, 25, cmap=cm, alpha=0.8, vmin=0, vmax=1)
+    ax.scatter(X[:, 0], X[:, 1],c=y, cmap=cm_bright, edgecolors='k')
+    ax.set_xlim(xx.min(), xx.max())
+    ax.set_ylim(yy.min(), yy.max())
+    ax.set_xlabel(r'$X_1$')
+    ax.set_ylabel(r'$X_2$')
+    ax.set_title(r'$\sigma(z)=P(y=1)$')
+    ax.grid(False)
+    ax_c = plt.colorbar(contour)
+    ax_c.set_ticks([0, 0.25, 0.5, 0.75, 1])
+    return ax
+
+def probability_line(ax, y, probs, threshold, shift=0.0, annot=False, colors=None):
+    if colors is None:
+        colors = ['r', 'b']
+    ax.grid(False)
+    ax.set_ylim([-0.1, 0.1])
+    ax.axes.get_yaxis().set_visible(False)
+    ax.plot([0, 1], [0, 0], linewidth=2, c='k', zorder=1)
+    ax.plot([0, 0], [-0.1, 0.1], c='k', zorder=1)
+    ax.plot([1, 1], [-0.1, 0.1], c='k', zorder=1)
+    tn = (y==0) & (probs<threshold)
+    fp = (y==0) & (probs>=threshold)
+    tp = (y==1) & (probs>=threshold)
+    fn = (y==1) & (probs<threshold)
+    ax.plot([threshold, threshold], [-0.1, 0.1], c='k', zorder=1, linestyle='--')
+    ax.scatter(probs[tn], np.zeros(tn.sum())+shift, c=colors[0], s=150, zorder=2, edgecolor=colors[0], linewidth=3)
+    ax.scatter(probs[fn], np.zeros(fn.sum())-shift, c=colors[1], s=150, zorder=2, edgecolor=colors[0], linewidth=3)
+    ax.scatter(probs[tp], np.zeros(tp.sum())-shift, c=colors[1], s=150, zorder=2, edgecolor=colors[1], linewidth=3)
+    ax.scatter(probs[fp], np.zeros(fp.sum())+shift, c=colors[0], s=150, zorder=2, edgecolors=colors[1], linewidth=3)
+    ax.set_xlabel(r'$\sigma(z)=P(y=1)$')
+    ax.set_title('Threshold={}'.format(threshold))
+    if annot:
+        ax.annotate('TN', xy=(0.2, 0.03), c='k', weight='bold', fontsize=20)
+        ax.annotate('FN', xy=(0.2,-0.08), c='k', weight='bold', fontsize=20)
+        ax.annotate('FP', xy=(0.7, 0.03), c='k', weight='bold', fontsize=20)
+        ax.annotate('TP', xy=(0.7, -0.08), c='k', weight='bold', fontsize=20)
+    return ax
 
 def figure2(prob1):
     fig, ax = plt.subplots(1, 2, figsize=(10, 5))
@@ -72,3 +171,79 @@ def figure4(prob1):
     ax.scatter([log_odds(prob1), log_odds(0.5), log_odds(1-prob1)], [prob1, 0.5, 1-prob1], c='r')
     fig.tight_layout()
     return fig 
+
+def figure7(X, y, model, device, cm=None, cm_bright=None):
+    if cm is None:
+        cm = plt.cm.RdBu
+    if cm_bright is None:
+        cm_bright = ListedColormap(["#FF0000", "#0000FF"])
+    fig = plt.figure(figsize=(15, 4.5))
+    h = 0.02 # step size in the mesh
+    x_min, x_max = -2.25, 2.25
+    y_min, y_max = -2.25, 2.25 
+    xx, yy = np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
+    # ravel() converts an 2D array to 1D long array
+    # np.c_ concatenate two 1D arrays [N] to a [N,2] array
+    logits = model(torch.as_tensor(np.c_[xx.ravel(), yy.ravel()]).float().to(device))
+    logits = logits.detach().cpu().numpy().reshape(xx.shape)
+    yhat = sigmoid(logits)
+    # 1st plot: logits map
+    ax = plt.subplot(1, 3, 1)
+    contour = ax.contourf(xx, yy, logits, 25, cmap=cm, alpha=.8) # 25 means number of levels
+    ax.scatter(X[:,0], X[:,1], c=y, cmap=cm_bright)
+    ax.set_xlim(xx.min(), xx.max())
+    ax.set_ylim(yy.min(), yy.max())
+    ax.set_xlabel(r'$X_1$')
+    ax.set_ylabel(r'$X_2$')
+    ax.set_title(r'$z = b + w_1x_1 + w_2x_2$')
+    ax.grid(False)
+    ax_c = plt.colorbar(contour)
+    ax_c.set_label("$z$", rotation=0)
+    
+    # 2nd plot: 3d probs map
+    ax = fig.add_subplot(1, 3, 2, projection='3d')
+    surf = ax.plot_surface(xx, yy, yhat, rstride=1, cstride=1, alpha=0.5, cmap=cm, linewidth=0, antialiased=True, vmin=0, vmax=1)
+    ax.scatter(X[:,0], X[:,1], c=y, cmap=cm_bright)
+    ax.set_xlim(xx.min(), xx.max())
+    ax.set_ylim(yy.min(), yy.max())
+    ax.set_xlabel(r'$X_1$')
+    ax.set_ylabel(r'$X_2$')
+    ax.set_title(r'$\sigma(z) = P(y=1)$')
+    ax_c = plt.colorbar(surf)
+    ax_c.set_ticks([0, 0.25, 0.5, 0.75, 1])
+    ax.view_init(30, 220)
+    
+    # 3rd plot: 2d probs contour
+    ax = plt.subplot(1, 3, 3)
+    ax.contour(xx, yy, yhat, levels=[0.5], cmap="Greys", vmin=0, vmax=1)
+    contour = ax.contourf(xx, yy, yhat, 25, cmap=cm, alpha=0.8, vmin=0, vmax=1)
+    ax.scatter(X[:,0], X[:,1], c=y, cmap=cm_bright)
+    ax.set_xlim(xx.min(), xx.max())
+    ax.set_ylim(yy.min(), yy.max())
+    ax.set_xlabel(r'$X_1$')
+    ax.set_ylabel(r'$X_2$')
+    ax.set_title(r'$\sigma(z) = P(y=1)$')
+    ax.grid(False)
+    
+    ax_c = plt.colorbar(contour)
+    ax_c.set_ticks([0, 0.25, 0.5, 1])
+    plt.tight_layout()
+    
+    
+    fig.tight_layout()
+    return fig 
+
+def figure9(x, y, model, device, probabilities, threshold, shift=0.0, annot=False, cm=None, cm_bright=None):
+    fig = plt.figure(figsize=(15, 5))
+    gs = fig.add_gridspec(3, 3)
+    ax = fig.add_subplot(gs[:, 0])
+    probability_contour(ax, model, device, x, y, threshold, cm, cm_bright)
+    if cm_bright is None:
+        colors = ['r', 'b']
+    else:
+        colors = cm_bright.colors
+    ax = fig.add_subplot(gs[1, 1:])
+    probability_line(ax, y, probabilities, threshold, shift, annot, colors)
+    plt.savefig('test.png')
+    fig.tight_layout()
+    return fig

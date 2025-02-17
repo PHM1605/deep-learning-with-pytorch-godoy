@@ -9,7 +9,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix, roc_curve, precision_recall_curve, auc 
 from stepbystep.v0 import StepByStep 
-from plots.chapter3 import figure1, figure2, figure3, figure4
+from plots.chapter3 import *
 
 X, y = make_moons(n_samples=100, noise=0.3, random_state=0)
 X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=13)
@@ -49,6 +49,7 @@ fig = figure3(p)
 # i.e. z=LogOddsRatio(p) == p=Sigmoid(z); z is "logit" = weight*x
 def sigmoid(z):
     return 1 / (1 + np.exp(-z))
+
 p = 0.75
 q = 1 - p
 print("Sigmoid of log odds ratio is probability: ", sigmoid(log_odds_ratio(p)), sigmoid(log_odds_ratio(q)))
@@ -121,5 +122,30 @@ fig = sbs.plot_losses()
 print("StepByStep model state dict: ", model.state_dict())
 # Prediction
 predictions = sbs.predict(x_train_tensor[:4]) # output: logits
-probability = sigmoid(predictions)
-print("Probabilities of predictions: ", probability)
+probabilities = sigmoid(predictions)
+print("Probabilities of predictions: ", probabilities)
+classes = (predictions >= 0).astype(int)
+print("Classes: ", classes)
+# Training set
+fig = figure7(X_train, y_train, sbs.model, sbs.device)
+# Validation set
+fig = figure7(X_val, y_val, sbs.model, sbs.device)
+
+## Are my data points separable?
+x = np.array([-2.8, -2.2, -1.8, -1.3, -.4, 0.3, 0.6, 1.3, 1.9, 2.5])
+y = np.array([0., 0., 0., 0., 1., 1., 1., 0., 0., 0.])
+fig = one_dimension(x, y)
+fig = two_dimensions(x, y)
+# Expand dimensions with Neural Network
+model = nn.Sequential()
+model.add_module('hidden', nn.Linear(2, 10))
+model.add_module('activation', nn.ReLU())
+model.add_module('output', nn.Linear(10, 1))
+model.add_module('sigmoid', nn.Sigmoid())
+loss_fn = nn.BCELoss()
+
+## Classfication threshold
+logits_val = sbs.predict(X_val)
+probabilities_val = sigmoid(logits_val).squeeze()
+threshold = 0.5
+fig = figure9(X_val, y_val, sbs.model, sbs.device, probabilities_val, threshold)
