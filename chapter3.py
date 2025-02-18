@@ -148,4 +148,34 @@ loss_fn = nn.BCELoss()
 logits_val = sbs.predict(X_val)
 probabilities_val = sigmoid(logits_val).squeeze()
 threshold = 0.5
-fig = figure9(X_val, y_val, sbs.model, sbs.device, probabilities_val, threshold)
+# fig = figure9(X_val, y_val, sbs.model, sbs.device, probabilities_val, threshold)
+
+## Confusion matrix illustration
+# fig = figure10(y_val, probabilities_val, threshold, 0.04, False)
+fig = figure10(y_val, probabilities_val, threshold, 0.04, True)
+cm_thresh50 = confusion_matrix(y_val, probabilities_val>=0.5)
+print("Confusion matrix: ", cm_thresh50) # [[TN, FP], [FN, TP]]
+def split_cm(cm):
+    actual_negative = cm[0]
+    tn = actual_negative[0]
+    fp = actual_negative[1]
+    actual_positive = cm[1]
+    fn = actual_positive[0]
+    tp = actual_positive[1]
+    return tn, fp, fn, tp 
+def tpr_fpr(cm):
+    tn, fp, fn, tp = split_cm(cm)
+    tpr = tp / (tp + fn)
+    fpr = fp / (fp + tn)
+    return tpr, fpr
+print("tpr, fpr: ", tpr_fpr(cm_thresh50))
+
+def precision_recall(cm):
+    tn, fp, fn, tp = split_cm(cm)
+    precision = tp / (tp + fp)
+    recall = tp / (tp + fn)
+    return precision, recall 
+print("precision, recall: ", precision_recall(cm_thresh50))
+
+## Trade-offs and Curves
+fig = eval_curves_from_probs(y_val, probabilities_val, [0.5], annot=True)

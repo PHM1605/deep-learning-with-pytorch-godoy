@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt 
 from matplotlib.colors import ListedColormap 
+from sklearn.metrics import confusion_matrix
 
 def odds(prob):
     return prob / (1 - prob)
@@ -12,24 +13,26 @@ def log_odds(prob):
 def sigmoid(z):
     return 1/(1+np.exp(-z))
 
-def figure1(X_train, y_train, X_val, y_val, cm_bright=None):
-    if cm_bright is None:
-        cm_bright = ListedColormap(['#FF0000', '#0000FF'])
-    fig, ax = plt.subplots(1, 2, figsize=(12, 6))
-    ax[0].scatter(X_train[:, 0], X_train[:, 1], c=y_train, cmap=cm_bright)
-    ax[0].set_xlabel(r'$X_1$')
-    ax[0].set_ylabel(r'$X_2$')
-    ax[0].set_xlim([-2.3, 2.3])
-    ax[0].set_ylim([-2.3, 2.3])
-    ax[0].set_title('Generated Data - Train')
-    ax[1].scatter(X_val[:, 0], X_val[:, 1], c=y_val, cmap=cm_bright)
-    ax[1].set_xlabel(r'$X_1$')
-    ax[1].set_ylabel(r'$X_2$')
-    ax[1].set_xlim([-2.3, 2.3])
-    ax[1].set_ylim([-2.3, 2.3])
-    ax[1].set_title('Generated Data -Validation')
-    fig.tight_layout()
-    return fig 
+def split_cm(cm):
+    actual_negative = cm[0]
+    tn = actual_negative[0]
+    fp = actual_negative[1]
+    actual_positive = cm[1]
+    fn = actual_positive[0]
+    tp = actual_positive[1]
+    return tn, fp, fn, tp 
+
+def tpr_fpr(cm):
+    tn, fp, fn, tp = split_cm(cm)
+    tpr = tp / (tp + fn)
+    fpr = fp / (fp + tn)
+    return tpr, fpr 
+
+def precision_recall(cm):
+    tn, fp, fn, tp = split_cm(cm)
+    precision = tp / (tp + fp)
+    recall = tp / (tp + fn)
+    return precision, recall
 
 def one_dimension(x, y, colors=None):
     if colors is None:
@@ -126,6 +129,62 @@ def probability_line(ax, y, probs, threshold, shift=0.0, annot=False, colors=Non
         ax.annotate('FP', xy=(0.7, 0.03), c='k', weight='bold', fontsize=20)
         ax.annotate('TP', xy=(0.7, -0.08), c='k', weight='bold', fontsize=20)
     return ax
+
+
+def eval_curves(fprs, tprs, recalls, precisions, thresholds, thresholds2=None, line=False, annot=False):
+    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+    if thresholds2 is None:
+        thresholds2 = thresholds[:]
+    marker = '.r-' if line else '.r'
+    axs[0].plot(fprs, tprs, marker, markersize=12, linewidth=2)
+    axs[0].set_xlim([-0.05, 1.05])
+    axs[0].set_ylim([-0.05, 1.05])
+    axs[0].set_xlabel('False Positive Rate')
+    axs[0].set_ylabel('True Positive Rate')
+    axs[0].set_title('ROC Curve')
+    axs[1].plot(recalls, precisions, marker, markersize=12, linewidth=2)
+    axs[1].set_xlim([-0.05, 1.05])
+    axs[1].set_ylim([-0.05, 1.05])
+    axs[1].set_xlabel('Recall')
+    axs[1].set_ylabel('Precision')
+    axs[1].set_title('Precision-Recall Curve')
+
+    if annot:
+        for thresh, fpr, tpr, prec, rec in zip(thresholds, fprs, tprs, precisions, recalls):
+            axs[0].annotate(str(thresh), xy=(fpr-0.03, tpr-0.07))
+        for thresh, fpr, tpr, prec, rec in zip(thresholds, fprs, tprs, precisions, recalls):
+            axs[1].annotate(str(thresh), xy=(rec-0.03, prec-0.07))
+
+    fig.tight_layout()
+    plt.savefig('test.png')
+    return fig
+
+def eval_curves_from_probs(y, probabilities, threshs, line=False, annot=False):
+    cms = [confusion_matrix(y, (probabilities>=threshold)) for threshold in threshs]
+    rates = np.array(list(map(tpr_fpr, cms)))
+    precrec = np.array(list(map(precision_recall, cms)))
+    return eval_curves(rates[:, 1], rates[:, 0], precrec[:, 1], precrec[:, 0], threshs, line=line, annot=annot)
+
+def figure1(X_train, y_train, X_val, y_val, cm_bright=None):
+    if cm_bright is None:
+        cm_bright = ListedColormap(['#FF0000', '#0000FF'])
+    fig, ax = plt.subplots(1, 2, figsize=(12, 6))
+    ax[0].scatter(X_train[:, 0], X_train[:, 1], c=y_train, cmap=cm_bright)
+    ax[0].set_xlabel(r'$X_1$')
+    ax[0].set_ylabel(r'$X_2$')
+    ax[0].set_xlim([-2.3, 2.3])
+    ax[0].set_ylim([-2.3, 2.3])
+    ax[0].set_title('Generated Data - Train')
+    ax[1].scatter(X_val[:, 0], X_val[:, 1], c=y_val, cmap=cm_bright)
+    ax[1].set_xlabel(r'$X_1$')
+    ax[1].set_ylabel(r'$X_2$')
+    ax[1].set_xlim([-2.3, 2.3])
+    ax[1].set_ylim([-2.3, 2.3])
+    ax[1].set_title('Generated Data -Validation')
+    fig.tight_layout()
+    return fig 
+
+
 
 def figure2(prob1):
     fig, ax = plt.subplots(1, 2, figsize=(10, 5))
@@ -246,4 +305,11 @@ def figure9(x, y, model, device, probabilities, threshold, shift=0.0, annot=Fals
     probability_line(ax, y, probabilities, threshold, shift, annot, colors)
     plt.savefig('test.png')
     fig.tight_layout()
+    return fig
+
+def figure10(y, probabilities, threshold, shift, annot, colors=None):
+    fig, ax = plt.subplots(1, 1, figsize=(10,2))
+    probability_line(ax, y, probabilities, threshold, shift, annot, colors)
+    fig.tight_layout()
+    plt.savefig('test.png')
     return fig
