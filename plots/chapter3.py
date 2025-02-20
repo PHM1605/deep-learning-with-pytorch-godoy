@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt 
 from matplotlib.colors import ListedColormap 
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, roc_curve, precision_recall_curve, auc
 
 def odds(prob):
     return prob / (1 - prob)
@@ -311,5 +311,40 @@ def figure10(y, probabilities, threshold, shift, annot, colors=None):
     fig, ax = plt.subplots(1, 1, figsize=(10,2))
     probability_line(ax, y, probabilities, threshold, shift, annot, colors)
     fig.tight_layout()
+    plt.savefig('test.png')
+    return fig
+
+def figure17(y, probabilities, threshs):
+    cms = [confusion_matrix(y, probabilities>=threshold) for threshold in threshs]
+    rates = np.array(list(map(tpr_fpr, cms)))
+    precrec = np.array(list(map(precision_recall, cms)))
+    precrec = np.nan_to_num(precrec, nan=1.)
+    fig = eval_curves(rates[:,1], rates[:,0], precrec[:,1], precrec[:,0], threshs, line=True, annot=False)
+    plt.savefig('test.png')
+    return fig
+
+def figure19(y, probabilities, threshs=(0.4, 0.5, 0.57), colors=None):
+    fig, axs = plt.subplots(3, 1, figsize=(14,20))
+    probability_line(axs[0], y, probabilities, threshs[0], 0.0, False, colors)
+    probability_line(axs[1], y, probabilities, threshs[1], 0.0, False, colors)
+    probability_line(axs[2], y, probabilities, threshs[2], 0.0, False, colors)
+    plt.savefig('test.png')
+    fig.tight_layout()
+    return fig 
+
+def figure20(y):
+    fpr_perfect, tpr_perfect, threshold1_perfect = roc_curve(y, y)
+    prec_perfect, rec_perfect, threshold2_perfect = precision_recall_curve(y, y)
+    fig = eval_curves(fpr_perfect, tpr_perfect, rec_perfect, prec_perfect, threshold1_perfect, threshold2_perfect, line=True)
+    plt.savefig('test.png')
+    return fig 
+
+def figure21(y, probabilities):
+    fpr_random, tpr_random, thresholds1_random = roc_curve(y, probabilities)
+    prec_random, rec_random, thresholds2_random = precision_recall_curve(y, probabilities)
+    fig = eval_curves(fpr_random, tpr_random, rec_random, prec_random, thresholds1_random, thresholds2_random, line=True)
+    axs = fig.axes
+    axs[0].plot([0, 1], [0, 1], 'k--', linewidth=2)
+    axs[1].plot([0, 1], [y.mean(), y.mean()], 'k--', linewidth=2)
     plt.savefig('test.png')
     return fig

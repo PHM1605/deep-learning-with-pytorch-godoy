@@ -179,3 +179,61 @@ print("precision, recall: ", precision_recall(cm_thresh50))
 
 ## Trade-offs and Curves
 fig = eval_curves_from_probs(y_val, probabilities_val, [0.5], annot=True)
+
+print("Confusion matrix for threshold 0.3: ", confusion_matrix(y_val, probabilities_val >= 0.3))
+fig = eval_curves_from_probs(y_val, probabilities_val, [0.3, 0.5], annot=True)
+print("Confusion matrix for threshold 0.7: ", confusion_matrix(y_val, probabilities_val >= 0.7))
+fig = eval_curves_from_probs(y_val, probabilities_val, [0.3, 0.5, 0.7], annot=True)
+threshs = np.linspace(0., 1, 11)
+fig = figure17(y_val, probabilities_val, threshs)
+
+fpr, tpr, thresholds1 = roc_curve(y_val, probabilities_val)
+prec, rec, thresholds2 = precision_recall_curve(y_val, probabilities_val)
+fig = eval_curves(fpr, tpr, rec, prec, thresholds1, thresholds2, line=True)
+
+## The precision quirk
+fig = figure19(y_val, probabilities_val)
+
+## Best curve
+fig = figure20(y_val)
+
+## Worst curve (randomly generated)
+np.random.seed(39)
+random_probs = np.random.uniform(size=y_val.shape)
+fpr_random, tpr_random, thresholds1_random = roc_curve(y_val, random_probs)
+prec_random, rec_random, thresholds2_random = precision_recall_curve(y_val, random_probs)
+fig = figure21(y_val, random_probs)
+
+## AUC 
+auroc = auc(fpr, tpr)
+aupr = auc(rec, prec)
+print("Our aucs: ", auroc, aupr)
+# In theory, worst ROC auc is 0.5; worst precision auc is #positive/#totalsamples i.e. 0.55 in our case
+auroc_random = auc(fpr_random, tpr_random)
+aupr_random = auc(rec_random, prec_random)
+print("Bad aucs: ", auroc_random, aupr_random)
+
+# ## Putting all together
+# torch.manual_seed(13)
+# x_train_tensor = torch.as_tensor(X_train).float()
+# y_train_tensor = torch.as_tensor(y_train.reshape(-1,1)).float()
+# x_val_tensor = torch.as_tensor(X_val).float()
+# y_val_tensor = torch.as_tensor(y_val.reshape(-1,1)).float() 
+# train_dataset = TensorDataset(x_train_tensor, y_train_tensor)
+# val_dataset = TensorDataset(x_val_tensor, y_val_tensor)
+# train_loader = DataLoader(dataset=train_dataset, batch_size=16, shuffle=True)
+# val_loader = DataLoader(dataset=val_dataset, batch_size=16)
+# lr = 0.1
+# torch.manual_seed(42)
+# model = nn.Sequential()
+# model.add_module('linear', nn.Linear(2,1))
+# optimizer = optim.SGD(model.parameters(), lr=lr)
+# loss_fn = nn.BCEWithLogitsLoss()
+# n_epochs = 100
+# sbs = StepByStep(model, loss_fn, optimizer)
+# sbs.set_loaders(train_loader, val_loader)
+# sbs.train(n_epochs)
+# logits_val = sbs.predict(X_val)
+# probabilities_val = sigmoid(logits_val).squeeze()
+# cm_thresh50 = confusion_matrix(y_val, probabilities_val>=0.5)
+# print(cm_thresh50)
