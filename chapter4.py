@@ -30,4 +30,26 @@ image_b[:, 4] = 255
 image_gray = 0.2126 * image_r + 0.7152 * image_g + 0.0722 * image_b 
 image_rgb = np.stack([image_r, image_g, image_b], axis=2)
 fig = image_channels(image_r, image_g, image_b, image_rgb, image_gray, rows=(0, 1))
+fig = image_channels(image_r, image_g, image_b, image_rgb, image_gray, rows=(0, 2))
+
+## Shape: NCHW (Pytorch) vs NHWC (Tensorflow)
+print("Images shape: ", images.shape) # [300,1,5,5]
+example = images[7] # [1,5,5]
+example_hwc = np.transpose(example, (1,2,0)) # [5,5,1]
+image_tensor = ToImage()(example_hwc) # convert to tensor, integer and [0,255]
+print("Image tensor and shape: ", image_tensor, image_tensor.shape)
+print("Is Image a tensor? ", isinstance(image_tensor, torch.Tensor))
+example_tensor = ToDtype(torch.float32, scale=True)(image_tensor) # convert from "int [0,255]" to "float [0,1]"
+print("Scaled float tensor: ", example_tensor)
+
+## Shorten the above steps
+def ToTensor():
+    return Compose([ToImage(), ToDtype(torch.float32, scale=True)])
+tensorizer = ToTensor()
+example_tensor = tensorizer(example_hwc)
+print("Scaled float tensor: ", example_tensor)
+example_img = ToPILImage()(example_tensor) # convert tensor to PIL Image
+print("Type of PIL image: ", type(example_img))
+plt.imshow(example_img, cmap='gray')
+plt.grid(False)
 
