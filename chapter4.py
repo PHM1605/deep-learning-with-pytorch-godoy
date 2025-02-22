@@ -50,6 +50,183 @@ example_tensor = tensorizer(example_hwc)
 print("Scaled float tensor: ", example_tensor)
 example_img = ToPILImage()(example_tensor) # convert tensor to PIL Image
 print("Type of PIL image: ", type(example_img))
+plt.clf()
 plt.imshow(example_img, cmap='gray')
 plt.grid(False)
+plt.savefig('test.png')
 
+## Image transformation with PIL image
+flipper = RandomHorizontalFlip(p=1.0)
+flipped_img = flipper(example_img)
+plt.imshow(flipped_img, cmap='gray')
+plt.grid(False)
+plt.savefig('test2.png')
+
+## Image transformation with Tensor only
+# Standardize for image = MinMaxScaling i.e. all pixels in range [-1,1] => Normalize [0,1]-image with 0.5 mean and 0.5 std
+img_tensor = tensorizer(flipped_img) # all pixels in [0,1] range
+normalizer = Normalize(mean=(0.5,), std=(0.5,))
+normalized_tensor = normalizer(img_tensor)
+
+## Doing a series of transformation with Compose
+composer = Compose([
+    RandomHorizontalFlip(p=1.0), 
+    Normalize(mean=(0.5,), std=(0.5,))
+    ])
+composed_tensor = composer(example_tensor)
+print("Are two methods equal? ", (composed_tensor==normalized_tensor).all())
+
+## Compare between "example" (the original [0,255] CHW integer one, numpy array) and "example_tensor" (the [0,255] CHW float one)
+example_tensor = torch.as_tensor(example/255).float()
+print("Example tensor: ", example_tensor)
+
+## Data preparation
+x_tensor = torch.as_tensor(images/255).float()
+y_tensor = torch.as_tensor(labels.reshape(-1, 1)).float() # [300,1]
+
+class TransformedTensorDataset(Dataset):
+    def __init__(self, x, y, transform=None):
+        self.x = x 
+        self.y = y
+        self.transform = transform 
+    def __getitem__(self, index):
+        x = self.x[index]
+        if self.transform:
+            x = self.transform(x)
+        return x, self.y[index]
+    def __len__(self):
+        return len(self.x)
+    
+composer = Compose([
+    RandomHorizontalFlip(p=0.5),
+    Normalize(mean=(0.5,), std=(0.5,))
+])
+dataset = TransformedTensorDataset(x_tensor, y_tensor, composer)
+# splits: list of split sizes of train/test
+def index_splitter(n, splits, seed=13):
+    idx = torch.arange(n)
+    splits_tensor = torch.as_tensor(splits)
+    total = splits_tensor.sum().float()
+    # if total does not add up to 1.0, make the splits adding up to 1.0 e.g. [0.8, 0.2]
+    if not total.isclose(torch.ones(1)[0]):
+        splits_tensor = splits_tensor/total 
+    torch.manual_seed(seed)
+    return random_split(idx, splits_tensor)
+
+train_idx, val_idx = index_splitter(len(x_tensor), [80, 20])
+print("Train indices: ", train_idx.indices)
+train_sampler = SubsetRandomSampler(train_idx)
+val_sampler = SubsetRandomSampler(val_idx)
+train_loader = DataLoader(
+    dataset=dataset, batch_size=16, sampler=train_sampler 
+)
+val_loader = DataLoader(
+    dataset=dataset, batch_size=16, sampler=val_sampler
+)
+print(f"#batches in the train dataloader: {len(iter(train_loader))}; #batches in the val dataloader: {len(iter(val_loader))}")
+
+## Doing the train/val split with 2 different composers (no SubsetRandomSampler)
+x_train_tensor = x_tensor[train_idx]
+y_train_tensor = y_tensor[train_idx]
+x_val_tensor = x_tensor[val_idx]
+y_val_tensor = y_tensor[val_idx]
+train_composer = Compose([
+    RandomHorizontalFlip(p=0.5),
+    Normalize(mean=(0.5,), std=(0.5,))
+])
+val_composer = Compose([
+    Normalize(mean=(0.5,), std=(0.5,))
+])
+train_dataset = TransformedTensorDataset(
+    x_train_tensor, y_train_tensor, transform=train_composer
+)
+val_dataset = TransformedTensorDataset(
+    x_val_tensor, y_val_tensor, transform=val_composer
+)
+train_loader = DataLoader(
+    dataset=train_dataset, batch_size=16, shuffle=True 
+)
+val_loader = DataLoader(
+    dataset=val_dataset, batch_size=16
+)
+
+## WeightedRandomSampler for imbalance dataset
+# List of classes, and count of each class
+def make_balanced_sampler(y):
+    classes, counts = y.unique(return_counts=True) # tensor([0,1]); tensor([80,160])
+    weights = 1.0 / counts.float() # tensor([0.0125, 0.0063])
+    sample_weights = weights[y_train_tensor.squeeze().long()] # Tensor: [a,b][0,1,0] = [a,b,a]
+    generator = torch.Generator()
+    sampler = WeightedRandomSampler(
+        weights=sample_weights, 
+        num_samples=len(sample_weights),
+        generator=generator,
+        replacement=True
+        )
+    return sampler 
+sampler = make_balanced_sampler(y_train_tensor)
+train_loader = DataLoader(
+    dataset=train_dataset, batch_size=16, sampler=sampler
+)
+val_loader = DataLoader(
+    dataset=val_dataset, batch_size=16
+)
+train_loader.sampler.generator.manual_seed(42)
+random.seed(42)
+
+# We make 123 positive samples, 240-123=117 negative samples (while we have 160 positive images and 80 negative images)
+print("Number of positive samples in the training dataset: ", torch.tensor([t[1].sum() for t in iter(train_loader)]).sum())
+
+# ## Put all together
+# x_tensor = torch.as_tensor(images/255).float()
+# y_tensor = torch.as_tensor(labels.reshape(-1, 1)).float() # [300,1]
+# class TransformedTensorDataset(Dataset):
+#     def __init__(self, x, y, transform=None):
+#         self.x = x 
+#         self.y = y
+#         self.transform = transform 
+#     def __getitem__(self, index):
+#         x = self.x[index]
+#         if self.transform:
+#             x = self.transform(x)
+#         return x, self.y[index]
+#     def __len__(self):
+#         return len(self.x)
+# def index_splitter(n, splits, seed=13):
+#     idx = torch.arange(n)
+#     splits_tensor = torch.as_tensor(splits)
+#     total = splits_tensor.sum().float()
+#     # if total does not add up to 1.0, make the splits adding up to 1.0 e.g. [0.8, 0.2]
+#     if not total.isclose(torch.ones(1)[0]):
+#         splits_tensor = splits_tensor/total 
+#     torch.manual_seed(seed)
+#     return random_split(idx, splits_tensor)
+# train_idx, val_idx = index_splitter(len(x_tensor), [80, 20])
+# train_composer = Compose([
+#     RandomHorizontalFlip(p=0.5),
+#     Normalize(mean=(0.5,), std=(0.5,))
+# ])
+# val_composer = Compose([
+#     Normalize(mean=(0.5,), std=(0.5,))
+# ])
+# train_dataset = TransformedTensorDataset(
+#     x_train_tensor, y_train_tensor, transform=train_composer
+# )
+# val_dataset = TransformedTensorDataset(
+#     x_val_tensor, y_val_tensor, transform=val_composer
+# )
+# sampler = make_balanced_sampler(y_train_tensor)
+# train_loader = DataLoader(
+#     dataset=train_dataset, batch_size=16, sampler=sampler
+# )
+# val_loader = DataLoader(
+#     dataset=val_dataset, batch_size=16
+# )
+
+## Flatten to use pixels as features
+dummy_xs, dummy_ys = next(iter(train_loader))
+print("Dummy data shape: ", dummy_xs.shape)
+flattener = nn.Flatten()
+dummy_xs_flat = flattener(dummy_xs)
+print("Dummy flattened data shape: ", dummy_xs_flat.shape)
+print("1st dummy flattened data value: ", dummy_xs_flat[0])

@@ -3,6 +3,7 @@ import datetime
 import torch 
 import matplotlib.pyplot as plt 
 from torch.utils.tensorboard import SummaryWriter 
+import random
 plt.style.use('fivethirtyeight')
 
 class StepByStep(object):
@@ -80,6 +81,11 @@ class StepByStep(object):
         torch.backends.cudnn.benchmark = False 
         torch.manual_seed(seed)
         np.random.seed(seed)
+        random.seed(seed)
+        try:
+            self.train_loader.sampler.generator.manual_seed(seed)
+        except AttributeError:
+            pass
         
     def train(self, n_epochs, seed=42):
         self.set_seed(seed)
