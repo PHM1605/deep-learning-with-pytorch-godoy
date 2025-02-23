@@ -133,14 +133,14 @@ class StepByStep(object):
     def plot_losses(self):
         fig = plt.figure(figsize=(10, 4))
         plt.plot(self.losses, label='Training Loss', c='b')
-        if self.val_loader:
-            plt.plot(self.val_losses, label='Validation Loss', c='r')
-            plt.yscale('log')
-            plt.xlabel('Epochs')
-            plt.ylabel('Loss')
-            plt.legend()
-            plt.tight_layout()
-            return fig
+        plt.plot(self.val_losses, label='Validation Loss', c='r')
+        plt.yscale('log')
+        plt.xlabel('Epochs')
+        plt.ylabel('Loss')
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig('test.png')
+        return fig
     
     def add_graph(self):
         if self.train_loader and self.writer:

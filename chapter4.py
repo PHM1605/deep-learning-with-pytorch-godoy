@@ -230,3 +230,48 @@ flattener = nn.Flatten()
 dummy_xs_flat = flattener(dummy_xs)
 print("Dummy flattened data shape: ", dummy_xs_flat.shape)
 print("1st dummy flattened data value: ", dummy_xs_flat[0])
+lr = 0.1
+torch.manual_seed(17)
+model_logistic = nn.Sequential()
+model_logistic.add_module('flatten', nn.Flatten())
+model_logistic.add_module('output', nn.Linear(25, 1, bias=False))
+model_logistic.add_module('sigmoid', nn.Sigmoid())
+optimizer_logistic = optim.SGD(model_logistic.parameters(), lr=lr)
+binary_loss_fn = nn.BCELoss()
+n_epochs = 100
+sbs_logistic = StepByStep(
+    model_logistic, binary_loss_fn, optimizer_logistic)
+sbs_logistic.set_loaders(train_loader, val_loader)
+sbs_logistic.train(n_epochs)
+fig = sbs_logistic.plot_losses()
+
+## Try deeper model
+lr = 0.1
+torch.manual_seed(17)
+model_nn = nn.Sequential()
+model_nn.add_module('flatten', nn.Flatten())
+model_nn.add_module('hidden0', nn.Linear(25, 5, bias=False))
+model_nn.add_module('hidden1', nn.Linear(5, 3, bias=False))
+model_nn.add_module('output', nn.Linear(3, 1, bias=False))
+model_nn.add_module('sigmoid', nn.Sigmoid())
+optimizer_nn = optim.SGD(model_nn.parameters(), lr=lr)
+binary_loss_fn = nn.BCELoss()
+n_epochs = 100
+sbs_nn = StepByStep(model_nn, binary_loss_fn, optimizer_nn)
+sbs_nn.set_loaders(train_loader, val_loader)
+sbs_nn.train(n_epochs)
+fig = sbs_nn.plot_losses()
+fig = figure5(sbs_logistic, sbs_nn)
+
+## Show that: deep model with no activation == shallow model with no hidden
+w_nn_hidden0 = model_nn.hidden0.weight.detach()
+w_nn_hidden1 = model_nn.hidden1.weight.detach()
+w_nn_output = model_nn.output.weight.detach()
+print('Deep weights shape: ', w_nn_hidden0.shape, w_nn_hidden1.shape, w_nn_output.shape)
+# Another way for matrix multiplication
+w_nn_equiv = w_nn_output.mm(w_nn_hidden1.mm(w_nn_hidden0))
+w_nn_equiv = w_nn_output @ w_nn_hidden1 @ w_nn_hidden0
+print('Equivalent deep weight shape: ', w_nn_equiv.shape)
+w_logistic_output = model_logistic.output.weight.detach()
+print('Shallow model weight shape: ', w_logistic_output.shape)
+fig = weights_comparison(w_logistic_output, w_nn_equiv)
