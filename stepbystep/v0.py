@@ -147,3 +147,8 @@ class StepByStep(object):
             x_dummy, y_dummy = next(iter(self.train_loader))
             self.writer.add_graph(self.model, x_dummy.to(self.device)) # add a graph for visualize the structure of model
     
+    def count_parameters(self):
+        return sum(p.numel()
+                   for p in self.model.parameters()
+                   if p.requires_grad)
+    

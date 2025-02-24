@@ -275,3 +275,10 @@ print('Equivalent deep weight shape: ', w_nn_equiv.shape)
 w_logistic_output = model_logistic.output.weight.detach()
 print('Shallow model weight shape: ', w_logistic_output.shape)
 fig = weights_comparison(w_logistic_output, w_nn_equiv)
+
+## Number of parameters of the two models
+print("Number of parameters of the two models: ", sbs_logistic.count_parameters(), sbs_nn.count_parameters())
+
+## Checking weights of the first layer as images
+fig = figure7(w_nn_hidden0)
+fig = plot_activation(torch.sigmoid)

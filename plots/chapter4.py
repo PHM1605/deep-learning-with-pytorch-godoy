@@ -77,8 +77,59 @@ def image_channels(red, green, blue, rgb, gray, rows=(0, 1, 2)):
 
 def weights_comparison(w_logistic_output, w_nn_equiv):
   fig = plt.figure(figsize=(15, 6))
+  ax0 = plt.subplot2grid((1,3), (0,0), colspan=2)
+  ax1 = plt.subplot2grid((1,3), (0,2))
+  ax0.bar(np.arange(25), w_logistic_output.cpu().numpy().squeeze(), alpha=1, label='Logistic')
+  ax0.bar(np.arange(25), w_nn_equiv.cpu().numpy().squeeze(), alpha=0.5, label='3-layer Network (Composed)')
+  ax0.set_title('Weights')
+  ax0.set_xlabel('Parameters')
+  ax0.set_ylabel('Value')
+  ax0.legend()
+  ax1.scatter(w_logistic_output.cpu().numpy(), w_nn_equiv.cpu().numpy(), alpha=0.5)
+  ax1.set_xlabel('Logistic')
+  ax1.set_ylabel('3-layer network (Composed)')
+  ax1.set_title('Weights')
+  ax1.set_xlim([-2, 2])
+  ax1.set_ylim([-2, 2])
   fig.tight_layout()
   fig.savefig('test.png')
+  return fig
+
+def plot_activation(func, name=None):
+  z = torch.linspace(-5, 5, 1000)
+  z.requires_grad_(True)
+  func(z).sum().backward()
+  sig = func(z).detach()
+  fig, ax = plt.subplots(1, 1, figsize=(8,5))
+  if name is None:
+    try:
+      name = func.__name__
+    except AttributeError:
+      name = ''
+  if name == 'sigmoid':
+    ax.set_ylim([0, 1.1])
+  elif name == 'tanh':
+    ax.set_ylim([-1.1, 1.1])
+  elif name == 'relu':
+    ax.set_ylim([-0.1, 5.01])
+  else:
+    ax.set_ylim([-1.1, 5.01])
+  ax.set_xticks(np.arange(-5, 6, 1))
+  ax.set_xlabel('z')
+  ax.set_ylabel(r'$\sigma(z)$')
+  ax.spines['right'].set_color('none')
+  ax.spines['top'].set_color('none')
+  ax.xaxis.set_ticks_position('bottom')
+  ax.yaxis.set_ticks_position('left')
+
+  ax.set_title(name, fontsize=16)
+  ax.plot(z.detach().numpy(), sig.numpy(), c='k', label='Activation')
+  ax.plot(z.detach().numpy(), z.grad.numpy(), c='r', label='Gradient')
+  ax.legend(loc=2)
+
+  ax.plot(z)
+  fig.tight_layout()
+  plt.savefig('test.png')
   return fig
 
 def figure5(sbs_logistic, sbs_nn):
@@ -95,6 +146,20 @@ def figure5(sbs_logistic, sbs_nn):
   axs[1].set_ylabel('Losses')
   axs[1].set_ylim([0.45, 0.75])
   axs[1].legend()
+  fig.tight_layout()
+  plt.savefig('test.png')
+  return fig
+
+def figure7(weights):
+  fig, axs = plt.subplots(1, 5, figsize=(15, 4))
+  for i, m in enumerate(weights):
+    axs[i].imshow(m.reshape(-1,5).tolist(), cmap='gray')
+    axs[i].grid(False)
+    axs[i].set_xticks([])
+    axs[i].set_yticks([])
+    axs[i].set_title(r'$w_{0' + str(i) + '}$')
+  fig.suptitle('Hidden Layer #0')
+  fig.subplots_adjust(top=0.6)
   fig.tight_layout()
   plt.savefig('test.png')
   return fig
