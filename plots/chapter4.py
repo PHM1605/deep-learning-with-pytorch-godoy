@@ -97,28 +97,39 @@ def weights_comparison(w_logistic_output, w_nn_equiv):
 
 def plot_activation(func, name=None):
   z = torch.linspace(-5, 5, 1000)
+  # Note: this is how to compute derivative in pytorch, and store the result in "z.grad"
   z.requires_grad_(True)
   func(z).sum().backward()
+  # ------------------------------------------------------------------------------------
   sig = func(z).detach()
-  fig, ax = plt.subplots(1, 1, figsize=(8,5))
+
+  fig, ax = plt.subplots(1, 1, figsize=(8, 5))
+
+  # Move left y-axis and bottim x-axis to centre, passing through (0,0)
   if name is None:
-    try:
-      name = func.__name__
-    except AttributeError:
-      name = ''
+      try:
+          name = func.__name__
+      except AttributeError:
+          name = ''
+
   if name == 'sigmoid':
-    ax.set_ylim([0, 1.1])
+      ax.set_ylim([0, 1.1])
   elif name == 'tanh':
-    ax.set_ylim([-1.1, 1.1])
+      ax.set_ylim([-1.1, 1.1])
   elif name == 'relu':
-    ax.set_ylim([-0.1, 5.01])
+      ax.set_ylim([-.1, 5.01])
   else:
-    ax.set_ylim([-1.1, 5.01])
+      ax.set_ylim([-1.1, 5.01])
+      
   ax.set_xticks(np.arange(-5, 6, 1))
   ax.set_xlabel('z')
   ax.set_ylabel(r'$\sigma(z)$')
+
+  # Eliminate upper and right axes
   ax.spines['right'].set_color('none')
   ax.spines['top'].set_color('none')
+
+  # Show ticks in the left and lower axes only
   ax.xaxis.set_ticks_position('bottom')
   ax.yaxis.set_ticks_position('left')
 
@@ -127,7 +138,6 @@ def plot_activation(func, name=None):
   ax.plot(z.detach().numpy(), z.grad.numpy(), c='r', label='Gradient')
   ax.legend(loc=2)
 
-  ax.plot(z)
   fig.tight_layout()
   plt.savefig('test.png')
   return fig
