@@ -160,6 +160,24 @@ def figure5(sbs_logistic, sbs_nn):
   plt.savefig('test.png')
   return fig
 
+def figure5b(sbs_logistic, sbs_nn, sbs_relu):
+   fig, axs = plt.subplots(1, 2, figsize=(15,6))
+   axs[0].plot(sbs_logistic.losses, 'b--', label="Logistic - Training")
+   axs[1].plot(sbs_logistic.val_losses, 'r--', label="Logistic - Validation")
+   axs[0].plot(sbs_nn.losses, 'b', label='3-layer Network - Training', alpha=0.5)
+   axs[1].plot(sbs_nn.val_losses, 'r', label='3-layer Network - Validation', alpha=0.5)
+   axs[0].plot(sbs_relu.losses, 'b', label='ReLU Network - Training', alpha=0.8)
+   axs[1].plot(sbs_relu.val_losses, 'r', label='ReLU Network - Validation', alpha=0.8)
+   axs[0].set_xlabel('Epochs')
+   axs[0].set_ylabel('Losses')
+   axs[0].legend()
+   axs[1].set_xlabel('Epochs')
+   axs[1].set_ylabel('Losses')
+   axs[1].legend()
+   fig.tight_layout()
+   plt.savefig('test.png')
+   return fig 
+
 def figure7(weights):
   fig, axs = plt.subplots(1, 5, figsize=(15, 4))
   for i, m in enumerate(weights):

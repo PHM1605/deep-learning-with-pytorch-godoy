@@ -177,52 +177,6 @@ random.seed(42)
 # We make 123 positive samples, 240-123=117 negative samples (while we have 160 positive images and 80 negative images)
 print("Number of positive samples in the training dataset: ", torch.tensor([t[1].sum() for t in iter(train_loader)]).sum())
 
-# ## Put all together
-# x_tensor = torch.as_tensor(images/255).float()
-# y_tensor = torch.as_tensor(labels.reshape(-1, 1)).float() # [300,1]
-# class TransformedTensorDataset(Dataset):
-#     def __init__(self, x, y, transform=None):
-#         self.x = x 
-#         self.y = y
-#         self.transform = transform 
-#     def __getitem__(self, index):
-#         x = self.x[index]
-#         if self.transform:
-#             x = self.transform(x)
-#         return x, self.y[index]
-#     def __len__(self):
-#         return len(self.x)
-# def index_splitter(n, splits, seed=13):
-#     idx = torch.arange(n)
-#     splits_tensor = torch.as_tensor(splits)
-#     total = splits_tensor.sum().float()
-#     # if total does not add up to 1.0, make the splits adding up to 1.0 e.g. [0.8, 0.2]
-#     if not total.isclose(torch.ones(1)[0]):
-#         splits_tensor = splits_tensor/total 
-#     torch.manual_seed(seed)
-#     return random_split(idx, splits_tensor)
-# train_idx, val_idx = index_splitter(len(x_tensor), [80, 20])
-# train_composer = Compose([
-#     RandomHorizontalFlip(p=0.5),
-#     Normalize(mean=(0.5,), std=(0.5,))
-# ])
-# val_composer = Compose([
-#     Normalize(mean=(0.5,), std=(0.5,))
-# ])
-# train_dataset = TransformedTensorDataset(
-#     x_train_tensor, y_train_tensor, transform=train_composer
-# )
-# val_dataset = TransformedTensorDataset(
-#     x_val_tensor, y_val_tensor, transform=val_composer
-# )
-# sampler = make_balanced_sampler(y_train_tensor)
-# train_loader = DataLoader(
-#     dataset=train_dataset, batch_size=16, sampler=sampler
-# )
-# val_loader = DataLoader(
-#     dataset=val_dataset, batch_size=16
-# )
-
 ## Flatten to use pixels as features
 dummy_xs, dummy_ys = next(iter(train_loader))
 print("Dummy data shape: ", dummy_xs.shape)
@@ -281,4 +235,129 @@ print("Number of parameters of the two models: ", sbs_logistic.count_parameters(
 
 ## Checking weights of the first layer as images
 fig = figure7(w_nn_hidden0)
+
+## Different activation functions
 fig = plot_activation(torch.sigmoid)
+fig = plot_activation(torch.tanh) # slower convergence so can cause vanishing gradient
+fig = plot_activation(F.relu) # faster convergence as there is no vanishing gradient; but can have "dead-neuron" (node always negative -> gradient=0 -> no update)
+fig = plot_activation(nn.LeakyReLU()) # or F.leaky_relu; solve the dead-neuron problem of Relu: sigma(z) = z if z>=0; = 0.01z if z<0
+# to let the model learn the negative coefficients "a" of leaky-relu: sigma(z) = z if z>=0; =az if z<0
+fig = plot_activation(nn.PReLU(init=0.2), name='Parametric ReLU') # default a=0.25
+
+## Deeper model
+lr = 0.1
+torch.manual_seed(17)
+model_relu = nn.Sequential()
+model_relu.add_module('flatten', nn.Flatten())
+model_relu.add_module('hidden0', nn.Linear(25, 5, bias=False))
+model_relu.add_module('activation0', nn.ReLU())
+model_relu.add_module('hidden1', nn.Linear(5, 3, bias=False))
+model_relu.add_module('activation1', nn.ReLU())
+model_relu.add_module('output', nn.Linear(3, 1, bias=False))
+model_relu.add_module('sigmoid', nn.Sigmoid())
+optimizer_relu = optim.SGD(model_relu.parameters(), lr=lr)
+binary_loss_fn = nn.BCELoss()
+n_epochs = 50 
+sbs_relu = StepByStep(model_relu, binary_loss_fn, optimizer_relu)
+sbs_relu.set_loaders(train_loader, val_loader)
+sbs_relu.train(n_epochs)
+fig = sbs_relu.plot_losses()
+
+## Compare 3 networks
+fig = figure5b(sbs_logistic, sbs_nn, sbs_relu)
+
+# ## Putting all together
+# class TransformedTensorDataset(Dataset):
+#     def __init__(self, x, y, transform=None):
+#         self.x = x 
+#         self.y = y
+#         self.transform = transform 
+#     def __getitem__(self, index):
+#         x = self.x[index]
+#         if self.transform:
+#             x = self.transform(x)
+#         return x, self.y[index]
+#     def __len__(self):
+#         return len(self.x)
+
+# def index_splitter(n, splits, seed=13):
+#     idx = torch.arange(n)
+#     splits_tensor = torch.as_tensor(splits)
+#     total = splits_tensor.sum().float()
+#     # if total does not add up to 1.0, make the splits adding up to 1.0 e.g. [0.8, 0.2]
+#     if not total.isclose(torch.ones(1)[0]):
+#         splits_tensor = splits_tensor/total 
+#     torch.manual_seed(seed)
+#     return random_split(idx, splits_tensor)
+
+# def make_balanced_sampler(y):
+#     classes, counts = y.unique(return_counts=True) # tensor([0,1]); tensor([80,160])
+#     weights = 1.0 / counts.float() # tensor([0.0125, 0.0063])
+#     sample_weights = weights[y_train_tensor.squeeze().long()] # Tensor: [a,b][0,1,0] = [a,b,a]
+#     generator = torch.Generator()
+#     sampler = WeightedRandomSampler(
+#         weights=sample_weights, 
+#         num_samples=len(sample_weights),
+#         generator=generator,
+#         replacement=True
+#         )
+#     return sampler 
+
+# x_tensor = torch.as_tensor(images/255).float()
+# y_tensor = torch.as_tensor(labels.reshape(-1, 1)).float() # [300,1]
+# train_idx, val_idx = index_splitter(len(x_tensor), [80, 20])
+# x_train_tensor = x_tensor[train_idx]
+# y_train_tensor = y_tensor[train_idx]
+# x_val_tensor = x_tensor[val_idx]
+# y_val_tensor = y_tensor[val_idx]
+# train_composer = Compose([
+#     RandomHorizontalFlip(p=0.5),
+#     Normalize(mean=(0.5,), std=(0.5,))
+# ])
+# val_composer = Compose([
+#     Normalize(mean=(0.5,), std=(0.5,))
+# ])
+# train_dataset = TransformedTensorDataset(
+#     x_train_tensor, y_train_tensor, transform=train_composer
+# )
+# val_dataset = TransformedTensorDataset(
+#     x_val_tensor, y_val_tensor, transform=val_composer
+# )
+
+# def make_balanced_sampler(y):
+#     classes, counts = y.unique(return_counts=True) # tensor([0,1]); tensor([80,160])
+#     weights = 1.0 / counts.float() # tensor([0.0125, 0.0063])
+#     sample_weights = weights[y_train_tensor.squeeze().long()] # Tensor: [a,b][0,1,0] = [a,b,a]
+#     generator = torch.Generator()
+#     sampler = WeightedRandomSampler(
+#         weights=sample_weights, 
+#         num_samples=len(sample_weights),
+#         generator=generator,
+#         replacement=True
+#         )
+#     return sampler 
+
+# sampler = make_balanced_sampler(y_train_tensor)
+# train_loader = DataLoader(
+#     dataset=train_dataset, batch_size=16, shuffle=True 
+# )
+# val_loader = DataLoader(
+#     dataset=val_dataset, batch_size=16
+# )
+
+# lr = 0.1
+# torch.manual_seed(17)
+# model_relu = nn.Sequential()
+# model_relu.add_module('flatten', nn.Flatten())
+# model_relu.add_module('hidden0', nn.Linear(25, 5, bias=False))
+# model_relu.add_module('activation0', nn.ReLU())
+# model_relu.add_module('hidden1', nn.Linear(5, 3, bias=False))
+# model_relu.add_module('activation1', nn.ReLU())
+# model_relu.add_module('output', nn.Linear(3, 1, bias=False))
+# model_relu.add_module('sigmoid', nn.Sigmoid())
+# optimizer_relu = optim.SGD(model_relu.parameters(), lr=lr)
+# binary_loss_fn = nn.BCELoss()
+# n_epochs = 50 
+# sbs_relu = StepByStep(model_relu, binary_loss_fn, optimizer_relu)
+# sbs_relu.set_loaders(train_loader, val_loader)
+# sbs_relu.train(n_epochs)
