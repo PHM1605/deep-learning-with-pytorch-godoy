@@ -8,7 +8,8 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms.v2 import Compose, Normalize
 from data_generation.image_classification import generate_dataset
-# from helpers import index_splitter, make_balanced_sampler
+from plots.chapter5 import plot_images
+from helpers import index_splitter, make_balanced_sampler
 # from stepbystep.v1 import StepByStep 
 
 ## Convolution
@@ -85,4 +86,94 @@ edge = np.array([[
     ]])
 kernel_edge = torch.as_tensor(edge).float()
 print("Edge kernel shape: ", kernel_edge.shape)
+padded = F.pad(image, (1,1,1,1), mode='constant', value=0)
+conv_padded = F.conv2d(padded, kernel_edge, stride=1)
 
+## Pooling
+# Max pool
+pooled = F.max_pool2d(conv_padded, kernel_size=2) # can add "stride=1"
+maxpool4 = nn.MaxPool2d(kernel_size=4)
+pooled4 = maxpool4(conv_padded)
+print('Resulting max-pool: ', pooled, pooled4)
+# Average pool
+# F.avg_pool2d() or nn.AvgPool2d
+
+## Flatten
+flattened = nn.Flatten()(pooled)
+print("Flattened: ", flattened)
+# ... or we can use pooled.view(1, -1)
+
+## LeNet
+lenet = nn.Sequential()
+# Featurizer
+# Block 1: 1x28x28 -> 6x28x28 -> 6x14x14
+lenet.add_module('C1', nn.Conv2d(in_channels=1, out_channels=6, kernel_size=5, padding=2))
+lenet.add_module('func1', nn.ReLU())
+lenet.add_module('S2', nn.MaxPool2d(kernel_size=2))
+# Block 2: 6x14x14 -> 16x10x10 -> 16x5x5
+lenet.add_module('C3', nn.Conv2d(in_channels=6, out_channels=16, kernel_size=5))
+lenet.add_module('func2', nn.ReLU())
+lenet.add_module('S4', nn.MaxPool2d(kernel_size=2))
+# Block3: 16x5x5 -> 120x1x1
+lenet.add_module('C5', nn.Conv2d(in_channels=16, out_channels=120, kernel_size=5))
+lenet.add_module('func2', nn.ReLU())
+# Flattening -> 'features' (120,)
+lenet.add_module('flatten', nn.Flatten())
+# Classification
+# Hidden Layer
+lenet.add_module('F6', nn.Linear(in_features=120, out_features=84))
+lenet.add_module('func3', nn.ReLU())
+lenet.add_module('OUTPUT', nn.Linear(in_features=84, out_features=10))
+
+## Multiclass classification problem
+images, labels = generate_dataset(img_size=10, n_images=1000, binary=False, seed=17)
+fig = plot_images(images, labels, n_plot=30)
+
+class TransformedTensorDataset(Dataset):
+    def __init__(self, x, y, transform=None):
+        self.x = x 
+        self.y = y
+        self.transform = transform 
+    def __getitem__(self, index):
+        x = self.x[index]
+        if self.transform:
+            x = self.transform(x)
+        return x, self.y[index]
+    def __len__(self):
+        return len(self.x)
+
+x_tensor = torch.as_tensor(images/255).float()
+y_tensor = torch.as_tensor(labels).long()
+train_idx, val_idx = index_splitter(len(x_tensor), [80, 20])
+x_train_tensor = x_tensor[train_idx]
+y_train_tensor = y_tensor[train_idx]
+x_val_tensor = x_tensor[val_idx]
+y_val_tensor = y_tensor[val_idx]
+train_composer = Compose([Normalize(mean=(0.5,), std=(0.5,))])
+val_composer = Compose([Normalize(mean=(0.5,), std=(0.5,))])
+train_dataset = TransformedTensorDataset(x_train_tensor, y_train_tensor, transform=train_composer)
+val_dataset = TransformedTensorDataset(x_val_tensor, y_val_tensor, transform=val_composer)
+sampler = make_balanced_sampler(y_train_tensor)
+train_loader = DataLoader(dataset=train_dataset, batch_size=16, sampler=sampler)
+val_loader = DataLoader(dataset=val_dataset, batch_size=16)
+
+## Softmax - the probabilities
+logits = torch.tensor([1.3863, 0.0000, -0.6931])
+odds_ratio = torch.exp(logits)
+print("Odds ratio (exp(z)): ", odds_ratio)
+# Other methods: nn.Softmax(dim=-1)(logits); F.softmax(logits, dim=-1)
+softmaxed = odds_ratio / odds_ratio.sum()
+print("Softmaxed: ", softmaxed)
+
+## Log Softmax: use F.log_softmax() or nn.LogSoftmax
+## Negative log likelihood loss: -1/(N0+N1+N2)*(sum-of-N0-predicted-probs-for-class-0+sum-of-N1-predicted-probs-for-class-1+sum-of-N2-predicted-probs-for-class-2)
+log_probs = F.log_softmax(logits, dim=-1)
+print("Log probs: ", log_probs)
+label = torch.tensor([2])
+print("Loss when label is 2: ", F.nll_loss(log_probs.view(-1,3), label, reduction='mean')) # reduction: 'mean'/'sum'/'none'; last one returns array of losses
+
+torch.manual_seed(11)
+dummy_logits = torch.randn((5,3))
+dummy_labels = torch.tensor([0,0,1,2,1])
+dummy_log_probs = F.log_softmax(dummy_logits, dim=-1)
+print("Dummy log probs: ", dummy_log_probs)
