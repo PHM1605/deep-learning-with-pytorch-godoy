@@ -1,9 +1,7 @@
 import numpy as np
-import datetime 
-import torch 
+import datetime, torch, random
 import matplotlib.pyplot as plt 
 from torch.utils.tensorboard import SummaryWriter 
-import random
 plt.style.use('fivethirtyeight')
 
 class StepByStep(object):

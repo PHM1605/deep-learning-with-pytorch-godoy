@@ -10,7 +10,7 @@ from torchvision.transforms.v2 import Compose, Normalize
 from data_generation.image_classification import generate_dataset
 from plots.chapter5 import plot_images
 from helpers import index_splitter, make_balanced_sampler
-# from stepbystep.v1 import StepByStep 
+from stepbystep.v1 import StepByStep 
 
 ## Convolution
 # Simple arrays illustration of convolution
@@ -172,8 +172,47 @@ print("Log probs: ", log_probs)
 label = torch.tensor([2])
 print("Loss when label is 2: ", F.nll_loss(log_probs.view(-1,3), label, reduction='mean')) # reduction: 'mean'/'sum'/'none'; last one returns array of losses
 
+## NLLLoss
 torch.manual_seed(11)
 dummy_logits = torch.randn((5,3))
 dummy_labels = torch.tensor([0,0,1,2,1])
 dummy_log_probs = F.log_softmax(dummy_logits, dim=-1)
 print("Dummy log probs: ", dummy_log_probs)
+loss_fn = nn.NLLLoss()
+print("NLLLoss: ", loss_fn(dummy_log_probs, dummy_labels))
+loss_fn = nn.NLLLoss(weight=torch.tensor([1.,1.,2.]))
+print("NLLLoss with sample weights: ", loss_fn(dummy_log_probs, dummy_labels))
+loss_fn = nn.NLLLoss(ignore_index=2)
+print("NLLLoss with label y=2 being ignored: ", loss_fn(dummy_log_probs, dummy_labels))
+
+## Cross-Entropy Loss: combine log_softmax  and nllloss into one
+torch.manual_seed(11)
+dummy_logits = torch.randn((5, 3))
+dummy_labels = torch.tensor([0,0,1,2,1])
+loss_fn = nn.CrossEntropyLoss()
+print("CrossEntropy loss: ", loss_fn(dummy_logits, dummy_labels))
+
+
+## Model with Cross-Entropy loss
+torch.manual_seed(13)
+model_cnn1 = nn.Sequential()
+# Featurizer
+# Block 1: 1@10x10 -> n_channels@8x8 -> n_channels@4x4 -> n_channels*4*4
+n_channels = 1
+model_cnn1.add_module('conv1', nn.Conv2d(in_channels=1, out_channels=n_channels, kernel_size=3))
+model_cnn1.add_module('relu1', nn.ReLU())
+model_cnn1.add_module('maxp1', nn.MaxPool2d(kernel_size=2))
+model_cnn1.add_module('flatten', nn.Flatten())
+# Classification
+model_cnn1.add_module('fc1', nn.Linear(in_features=n_channels*4*4, out_features=10))
+model_cnn1.add_module('relu2', nn.ReLU())
+model_cnn1.add_module('fc2', nn.Linear(in_features=10, out_features=3))
+# we could add nn.LogSoftmax layer here, then must use NLLLoss function
+# ... or not necessary, then use nn.CrossEntropyLoss function
+lr = 0.1
+multi_loss_fn = nn.CrossEntropyLoss(reduction='mean')
+optimizer_cnn1 = optim.SGD(model_cnn1.parameters(), lr=lr)
+sbs_cnn1 = StepByStep(model_cnn1, multi_loss_fn, optimizer_cnn1)
+sbs_cnn1.set_loaders(train_loader, val_loader)
+sbs_cnn1.train(20)
+fig = sbs_cnn1.plot_losses()
