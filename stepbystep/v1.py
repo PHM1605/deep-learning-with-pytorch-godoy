@@ -2,6 +2,7 @@ import numpy as np
 import datetime, random, torch
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
+import torch.nn as nn
 plt.style.use('fivethirtyeight')
 
 class StepByStep(object):
@@ -19,6 +20,9 @@ class StepByStep(object):
         self.total_epochs = 0
         self.train_step_fn = self._make_train_step_fn()
         self.val_step_fn = self._make_val_step_fn()
+        ## Hook
+        self.visualization = {}
+        self.handles = {} 
     
     def to(self, device):
         try:
@@ -154,7 +158,7 @@ class StepByStep(object):
     
     @staticmethod
     def _visualize_tensors(axs, x, y=None, yhat=None, layer_name='', title=None):
-        n_images = len(axs)
+        n_images = len(axs) # n_images = in_channels 
         minv, maxv = np.min(x[:n_images]), np.max(x[:n_images])
         for j, image in enumerate(x[:n_images]):
             ax = axs[j]
@@ -175,3 +179,68 @@ class StepByStep(object):
                 vmin = minv,
                 vmax = maxv
             )
+    
+    def visualize_filters(self, layer_name, **kwargs):
+        try: 
+            layer = self.model 
+            for name in layer_name.split("."):
+                layer = getattr(layer, name)
+            if isinstance(layer, nn.Conv2d):
+                weights = layer.weight.data.cpu().numpy() # [out_channels, in_channels, kernel_size, kernel_size]
+                n_filters, n_channels, _, _ = weights.shape 
+                size = (2*n_channels+2, 2*n_filters)
+                fig, axes = plt.subplots(n_filters, n_channels, figsize=size)
+                axes = np.atleast_2d(axes)
+                axes = axes.reshape(n_filters, n_channels)
+                for i in range(n_filters):
+                    StepByStep._visualize_tensors(axes[i, :], weights[i], layer_name=f'Filter #{i}', title='Channel')
+                for ax in axes.flat:
+                    ax.label_outer()
+                fig.tight_layout()
+                plt.savefig('test.png')
+                return fig 
+        except AttributeError:
+            return 
+    
+    def attach_hooks(self, layers_to_hook, hook_fn=None):
+        # Clear any previous values
+        self.visualization = {}
+        modules = list(self.model.named_modules()) # [('', Sequential), ('conv1', Conv2d), ('relu1', ReLU), ()....]
+        layer_names = {layer: name for name, layer in modules[1:]} # {Conv2d:'conv1', ReLU:'relu1'}
+        if hook_fn is None:
+            def hook_fn(layer, inputs, outputs):
+                name = layer_names[layer]
+                values = outputs.detach().cpu().numpy()
+                # if predictions for many times -> concatenate them
+                if self.visualization[name] is None:
+                    self.visualization[name] = values
+                else:
+                    self.visualization[name] = np.concatenate([self.visualization[name], values])
+        for name, layer in modules:
+            if name in layers_to_hook:
+                self.visualization[name] = None
+                self.handles[name] = layer.register_forward_hook(hook_fn) # {'conv1':RemovableHandle 0x764aa, 'relu1':RemovableHandle 0x24a123}
+    
+    def remove_hooks(self):
+        for handle in self.handles.values():
+            handle.remove()
+        self.handles = {}
+    
+    # layers: list of names ['conv1', 'relu1', ...]
+    def visualize_outputs(self, layers, n_images=10, y=None, yhat=None):
+        # condition of filter: l, which is each component of "layers", is in the list of keys stored in "visualization"
+        layers = filter(lambda l: l in self.visualization.keys(), layers)
+        layers = list(layers)
+        shapes = [self.visualization[layer].shape for layer in layers]
+        # [batch, n_channels, width, height] or [batch, width, height]
+        n_rows = [shape[1] if len(shape)==4 else 1 
+                  for shape in shapes]
+        total_rows = np.sum(n_rows)
+        fig, axes = plt.subplots(total_rows, n_images, figsize=(1.5*n_images, 1.5*total_rows))
+        axes = np.atleast_2d(axes).reshape(total_rows, n_images)
+        row = 0
+        for i, layer in enumerate(layers):
+            start_row = row 
+            output = self.visualization[layer]
+            is_vector = len(output.shape==2)
+            

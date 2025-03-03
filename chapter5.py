@@ -11,6 +11,7 @@ from data_generation.image_classification import generate_dataset
 from plots.chapter5 import plot_images
 from helpers import index_splitter, make_balanced_sampler
 from stepbystep.v1 import StepByStep 
+import matplotlib.pyplot as plt
 
 ## Convolution
 # Simple arrays illustration of convolution
@@ -216,3 +217,53 @@ sbs_cnn1 = StepByStep(model_cnn1, multi_loss_fn, optimizer_cnn1)
 sbs_cnn1.set_loaders(train_loader, val_loader)
 sbs_cnn1.train(20)
 fig = sbs_cnn1.plot_losses()
+# visualize weights of filters
+weights_filter = model_cnn1.conv1.weight.data.cpu().numpy()
+print("Weights shape: ", weights_filter.shape)
+fig = sbs_cnn1.visualize_filters('conv1', cmap='gray')
+
+## Hook - "forward hook" or "backward hook"
+dummy_model = nn.Linear(1, 1)
+dummy_list = []
+def dummy_hook(layer, inputs, outputs):
+    dummy_list.append((layer, inputs, outputs))
+dummy_handle = dummy_model.register_forward_hook(dummy_hook)
+dummy_x = torch.tensor([0.3])
+print("Forwarding model: ", dummy_model(dummy_x))
+print("Recording params: ", dummy_list)
+# To remove a hook (but "dummy_list" still has a value)
+dummy_handle.remove() 
+
+## Hook for our current main model
+modules = list(sbs_cnn1.model.named_modules())
+print("Modules: ", modules) # [('', Sequential), ('conv1', Conv2d), ('relu1', ReLU), ()....]
+layer_names = {layer:name for name, layer in modules[1:]}
+print("Layer names: ", layer_names) # {Conv2d:'conv1', ReLU:'relu1',...}
+visualization = {}
+def hook_fn(layer, inputs, outputs):
+    name = layer_names[layer]
+    visualization[name] = outputs.detach().cpu().numpy()
+layers_to_hook = ['conv1', 'relu1', 'maxp1', 'flatten', 'fc1', 'relu2', 'fc2']
+handles = {} # {'conv1': RemovableHandle, 'relu1': RemovableHandle}
+for name, layer in modules:
+    if name in layers_to_hook:
+        handles[name] = layer.register_forward_hook(hook_fn)
+images_batch, labels_batch = next(iter(val_loader))
+logits = sbs_cnn1.predict(images_batch)
+print("Visualization result: ", visualization.keys())
+# Remove the hooks using "handle"
+for handle in handles.values():
+    handle.remove()
+handles = {}
+# Code to put hook to model (above code not need)
+sbs_cnn1.attach_hooks(layers_to_hook=['conv1', 'relu1', 'maxp1', 'flatten', 'fc1', 'relu2', 'fc2'])
+images_batch, labels_batch = next(iter(val_loader)) # [16,1,10,10]
+logits = sbs_cnn1.predict(images_batch)
+sbs_cnn1.remove_hooks()
+predicted = np.argmax(logits, 1)
+print("Predicted result: ", predicted)
+# images_batch after squeeze: [16,10,10]
+fig = plot_images(images_batch.squeeze(), labels_batch.squeeze(), n_plot=10)
+featurizer_layers = ['conv1', 'relu1', 'maxp1', 'flatten']
+with plt.style.context('seaborn-white'):
+    fig = sbs_cnn1.visualize_outputs(featurizer_layers)
