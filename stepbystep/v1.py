@@ -3,6 +3,7 @@ import datetime, random, torch
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 import torch.nn as nn
+import torch.nn.functional as F
 plt.style.use('fivethirtyeight')
 
 class StepByStep(object):
@@ -232,7 +233,8 @@ class StepByStep(object):
         layers = filter(lambda l: l in self.visualization.keys(), layers)
         layers = list(layers)
         shapes = [self.visualization[layer].shape for layer in layers]
-        # [batch, n_channels, width, height] or [batch, width, height]
+        # shape: [batch, n_channels, width, height] or [batch, length]
+        # n_rows: #channels for each layer
         n_rows = [shape[1] if len(shape)==4 else 1 
                   for shape in shapes]
         total_rows = np.sum(n_rows)
@@ -241,6 +243,56 @@ class StepByStep(object):
         row = 0
         for i, layer in enumerate(layers):
             start_row = row 
+            # output: [batch, n_channels, width, height] or [batch, length]
             output = self.visualization[layer]
-            is_vector = len(output.shape==2)
-            
+            is_vector = len(output.shape)==2
+            # Loop through each layer
+            for j in range(n_rows[i]):
+                StepByStep._visualize_tensors(
+                    axes[row, :],                    
+                    output if is_vector else output[:,j].squeeze(),
+                    y,
+                    yhat,
+                    layer_name=layers[i] if is_vector else f'{layers[i]}\nfil#{row-start_row}',
+                    title='Image' if (row==0) else None
+                )
+                row += 1
+        for ax in axes.flat:
+            ax.label_outer()
+        plt.tight_layout()
+        plt.savefig('test.png')
+        return fig 
+
+    # Check for only one batch
+    def correct(self, x, y, threshold=0.5):
+        self.model.eval()
+        yhat = self.model(x.to(self.device))
+        y = y.to(self.device)
+        self.model.train()
+        n_samples, n_dims = yhat.shape
+        if n_dims > 1:
+            _, predicted = torch.max(yhat, 1)
+        else:
+            n_dims += 1
+            # In binary classification, check if the last layer is sigmoid or logits 
+            if isinstance(self.model, nn.Sequential) and isinstance(self.model[-1], nn.Sigmoid):
+                predicted = (yhat > threshold).long()
+            else:
+                predicted = (F.sigmoid(yhat) > threshold).long()
+        result = []
+        for c in range(n_dims):
+            n_class = (y==c).sum().item() # #samples with true class 'c'
+            n_correct = (predicted[y==c] == c).sum().item()
+            result.append((n_correct, n_class))
+        return torch.tensor(result) # [#classes, 2], row0: #correct of class0, #true of class0
+    
+    # Check for the whole list of batches, func is the 'correct' function above
+    @staticmethod
+    def loader_apply(loader, func, reduce='sum'):
+        results = [func(x,y) for i,(x,y) in enumerate(loader)]
+        results = torch.stack(results, axis=0)
+        if reduce == 'sum':
+            results = results.sum(axis=0)
+        elif reduce == 'mean':
+            results = results.float().mean(axis=0)
+        return results 

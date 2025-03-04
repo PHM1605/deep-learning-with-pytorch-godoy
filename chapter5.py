@@ -255,8 +255,11 @@ print("Visualization result: ", visualization.keys())
 for handle in handles.values():
     handle.remove()
 handles = {}
+
 # Code to put hook to model (above code not need)
 sbs_cnn1.attach_hooks(layers_to_hook=['conv1', 'relu1', 'maxp1', 'flatten', 'fc1', 'relu2', 'fc2'])
+
+## Visualize features from model
 images_batch, labels_batch = next(iter(val_loader)) # [16,1,10,10]
 logits = sbs_cnn1.predict(images_batch)
 sbs_cnn1.remove_hooks()
@@ -265,5 +268,58 @@ print("Predicted result: ", predicted)
 # images_batch after squeeze: [16,10,10]
 fig = plot_images(images_batch.squeeze(), labels_batch.squeeze(), n_plot=10)
 featurizer_layers = ['conv1', 'relu1', 'maxp1', 'flatten']
-with plt.style.context('seaborn-white'):
-    fig = sbs_cnn1.visualize_outputs(featurizer_layers)
+fig = sbs_cnn1.visualize_outputs(featurizer_layers)
+
+## Visualize classifier
+classifier_layers = ['fc1', 'relu2', 'fc2']
+fig = sbs_cnn1.visualize_outputs(classifier_layers, y=labels_batch, yhat=predicted)
+
+## For one batch: How many samples of each class is correct?
+print("Recall (one batch): ", sbs_cnn1.correct(images_batch, labels_batch))
+
+## For all batches: How many samples of each class is correct?
+print("Recall (all batches): ", StepByStep.loader_apply(sbs_cnn1.val_loader, sbs_cnn1.correct))
+
+# ## Putting all together
+# images, labels = generate_dataset(img_size=10, n_images=1000, binary=False, seed=17)
+# x_tensor = torch.as_tensor(images/255).float()
+# y_tensor = torch.as_tensor(labels).long()
+# train_idx, val_idx = index_splitter(len(x_tensor), [80, 20])
+# x_train_tensor = x_tensor[train_idx]
+# y_train_tensor = y_tensor[train_idx]
+# x_val_tensor = x_tensor[val_idx]
+# y_val_tensor = y_tensor[val_idx]
+# train_composer = Compose([Normalize(mean=(0.5,), std=(0.5,))])
+# val_composer = Compose([Normalize(mean=(0.5,), std=(0.5,))])
+# train_dataset = TransformedTensorDataset(x_train_tensor, y_train_tensor, transform=train_composer)
+# val_dataset = TransformedTensorDataset(x_val_tensor, y_val_tensor, transform=val_composer)
+# sampler = make_balanced_sampler(y_train_tensor)
+# train_loader = DataLoader(dataset=train_dataset, batch_size=16, sampler=sampler)
+# val_loader = DataLoader(dataset=val_dataset, batch_size=16)
+# torch.manual_seed(13)
+# model_cnn1 = nn.Sequential()
+# n_channels = 1
+# model_cnn1.add_module('conv1', nn.Conv2d(in_channels=1, out_channels=n_channels, kernel_size=3))
+# model_cnn1.add_module('relu1', nn.ReLU())
+# model_cnn1.add_module('maxp1', nn.MaxPool2d(kernel_size=2))
+# model_cnn1.add_module('flatten', nn.Flatten())
+# model_cnn1.add_module('fc1', nn.Linear(in_features=n_channels*4*4, out_features=10))
+# model_cnn1.add_module('relu2', nn.ReLU())
+# model_cnn1.add_module('fc2', nn.Linear(in_features=10, out_features=3))
+# lr = 0.1
+# multi_loss_fn = nn.CrossEntropyLoss(reduction='mean')
+# optimizer_cnn1 = optim.SGD(model_cnn1.parameters(), lr=lr)
+# sbs_cnn1 = StepByStep(model_cnn1, multi_loss_fn, optimizer_cnn1)
+# sbs_cnn1.set_loaders(train_loader, val_loader)
+# sbs_cnn1.train(20)
+# fig_filters = sbs_cnn1.visualize_filters('conv1', cmap='gray')
+# featurizer_layers = ['conv1', 'relu1', 'maxp1', 'flatten']
+# classifier_layers = ['fc1', 'relu2', 'fc2']
+# sbs_cnn1.attach_hooks(layers_to_hook=['conv1', 'relu1', 'maxp1', 'flatten', 'fc1', 'relu2', 'fc2'])
+# images_batch, labels_batch = next(iter(val_loader)) # [16,1,10,10]
+# logits = sbs_cnn1.predict(images_batch)
+# sbs_cnn1.remove_hooks()
+# predicted = np.argmax(logits, 1)
+# fig_maps1 = sbs_cnn1.visualize_outputs(featurizer_layers)
+# fig_maps2 = sbs_cnn1.visualize_outputs(classifier_layers, y=labels_batch, yhat=predicted)
+# print("Recall (all batches): ", StepByStep.loader_apply(sbs_cnn1.val_loader, sbs_cnn1.correct))
