@@ -14,3 +14,4 @@ from data_generation.rps import download_rps
 from plots.chapter6 import *
 
 download_rps()
+fig = figure1()
