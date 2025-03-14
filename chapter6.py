@@ -62,7 +62,7 @@ class CNN2(nn.Module):
     def featurizer(self, x):
         x = self.conv1(x) # [3,28,28]->[n_filters,26,26]
         x = F.relu(x)
-        x = F.maxpool2d(x, kernel_size=2) # [n_filters,13,13]
+        x = F.max_pool2d(x, kernel_size=2) # [n_filters,13,13]
         x = self.conv2(x) # [n_filters,11,11]
         x = F.relu(x)
         x = F.max_pool2d(x, kernel_size=2) # [n_filters,5,5]
@@ -84,27 +84,67 @@ class CNN2(nn.Module):
         x = self.classifier(x)
         return x 
     
-## Dropout
-dropping_model = nn.Sequential(nn.Dropout(p=0.5))
-spaced_points = torch.linspace(0.1, 1.1, 11)
-print("Input spaced points: ", spaced_points)
-torch.manual_seed(44)
-dropping_model.train()
-output_train = dropping_model(spaced_points)
-# Some outputs are demolished to 0; the rest are scaled by 1/p (in this case, multiplying by 2)
-print("Output of dropping-model: ", output_train)
-print("Weight of adjusted output: ", F.linear(output_train, weight=torch.ones(11), bias=torch.tensor(0))) # 9.4
-# Why need adjusting? Because there is no dropout in 'eval' mode
-dropping_model.eval()
-output_eval = dropping_model(spaced_points)
-print("Output of non-dropping (eval) model: ", output_eval)
-print("Weight of non-adjusted eval output: ", F.linear(output_eval, weight=torch.ones(11), bias=torch.tensor(0))) # 6.6
-# Run the dropout experiments 1000 times, take the value of adjusted dropout outputs -> calculate their weight-sum, we will see the mean of those 1000 samples is closed to 6.6
-torch.manual_seed(17)
-p = 0.5
-distrib_outputs = torch.tensor([
-    F.linear(F.dropout(spaced_points, p=p), weight=torch.ones(11), bias=torch.tensor(0))
-    for _ in range(1000)
-])
-fig = figure7(p, distrib_outputs)
-fig = figure8()
+# ## Dropout
+# dropping_model = nn.Sequential(nn.Dropout(p=0.5))
+# spaced_points = torch.linspace(0.1, 1.1, 11)
+# print("Input spaced points: ", spaced_points)
+# torch.manual_seed(44)
+# dropping_model.train()
+# output_train = dropping_model(spaced_points)
+# # Some outputs are demolished to 0; the rest are scaled by 1/p (in this case, multiplying by 2)
+# print("Output of dropping-model: ", output_train)
+# print("Weight of adjusted output: ", F.linear(output_train, weight=torch.ones(11), bias=torch.tensor(0))) # 9.4
+# # Why need adjusting? Because there is no dropout in 'eval' mode
+# dropping_model.eval()
+# output_eval = dropping_model(spaced_points)
+# print("Output of non-dropping (eval) model: ", output_eval)
+# print("Weight of non-adjusted eval output: ", F.linear(output_eval, weight=torch.ones(11), bias=torch.tensor(0))) # 6.6
+# # Run the dropout experiments 1000 times, take the value of adjusted dropout outputs -> calculate their weight-sum, we will see the mean of those 1000 samples is closed to 6.6
+# torch.manual_seed(17)
+# p = 0.5
+# distrib_outputs = torch.tensor([
+#     F.linear(F.dropout(spaced_points, p=p), weight=torch.ones(11), bias=torch.tensor(0))
+#     for _ in range(1000)
+# ])
+# fig = figure7(p, distrib_outputs)
+# fig = figure8()
+
+# ## Dropout2D - dropping 'channels' instead of 'pixels'
+# fig = figure9(first_images)
+
+## Model config (without dropout)
+torch.manual_seed(13)
+model_cnn2 = CNN2(n_filters=5, p=0.3)
+multi_loss_fn = nn.CrossEntropyLoss(reduction='mean')
+optimizer_cnn2 = optim.Adam(model_cnn2.parameters(), lr=3e-4)
+sbs_cnn2 = StepByStep(model_cnn2, multi_loss_fn, optimizer_cnn2)
+sbs_cnn2.set_loaders(train_loader, val_loader)
+sbs_cnn2.train(10)
+fig = sbs_cnn2.plot_losses()
+print(StepByStep.loader_apply(val_loader, sbs_cnn2.correct))
+
+## Model config (with dropout)
+torch.manual_seed(13)
+model_cnn2_nodrop= CNN2(n_filters=5, p=0.0)
+multi_loss_fn = nn.CrossEntropyLoss(reduction='mean')
+optimizer_cnn2_nodrop = optim.Adam(model_cnn2_nodrop.parameters(), lr=3e-4)
+sbs_cnn2_nodrop = StepByStep(model_cnn2_nodrop, multi_loss_fn, optimizer_cnn2_nodrop)
+sbs_cnn2_nodrop.set_loaders(train_loader, val_loader)
+sbs_cnn2_nodrop.train(10)
+
+## Compare with dropout and without dropout
+fig = figure11(sbs_cnn2.losses, sbs_cnn2.val_losses, sbs_cnn2_nodrop.losses, sbs_cnn2_nodrop.val_losses)
+print("Correct/Total result for no-dropout-model, 1st is training result, 2nd is validation result: ", 
+      StepByStep.loader_apply(train_loader, sbs_cnn2_nodrop.correct).sum(axis=0),
+      StepByStep.loader_apply(val_loader, sbs_cnn2_nodrop.correct).sum(axis=0)
+      )
+print("Correct/Total result for with-dropout-model, 1st is training result, 2nd is validation result: ",
+      StepByStep.loader_apply(train_loader, sbs_cnn2.correct).sum(axis=0),
+      StepByStep.loader_apply(val_loader, sbs_cnn2.correct).sum(axis=0)
+      )
+
+## Visualizing Filters
+print("Shape of 1st ConvLayer of DropoutModel: ", model_cnn2.conv1.weight.shape) # [num_filters,num_channels,height,width]=[5,3,3,3]
+fig = sbs_cnn2.visualize_filters('conv1')
+# print("Shape of 2nd ConvLayer of DropoutModel: ", model_cnn2.conv2.weight.shape) # [num_filters,num_channels,height,width]=[5,5,3,3]
+# fig = sbs_cnn2.visualize_filters('conv2')
