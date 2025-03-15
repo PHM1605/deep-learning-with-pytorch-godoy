@@ -5,6 +5,9 @@ from torch.utils.tensorboard import SummaryWriter
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.transforms.v2 import Normalize
+from copy import deepcopy
+from torch.optim.lr_scheduler import LambdaLR
+
 plt.style.use('fivethirtyeight')
 
 class StepByStep(object):
@@ -317,3 +320,71 @@ class StepByStep(object):
         norm_std = total_stds / total_samples # [3], one for each channel 
         return Normalize(mean=norm_mean, std=norm_std)
     
+    def lr_range_test(self, data_loader, end_lr, num_iter=100, step_mode='exp', alpha=0.05, ax=None):
+        previous_states = {
+            'model': deepcopy(self.model.state_dict()),
+            'optimizer': deepcopy(self.optimizer.state_dict())
+        }
+        # Retrieve the learning rate set in the optimizer
+        start_lr = self.optimizer.state_dict()['param_groups'][0]['lr']
+        lr_fn = make_lr_fn(start_lr, end_lr, num_iter)
+        scheduler = LambdaLR(self.optimizer, lr_lambda=lr_fn)
+        tracking = {'loss': [], 'lr': []}
+        iteration = 0
+
+        # If we need more iterations than #batches in the DataLoader, DataLoader is looped more than once
+        while (iteration < num_iter):
+            for x_batch, y_batch in data_loader:
+                x_batch = x_batch.to(self.device)
+                y_batch = y_batch.to(self.device)
+                yhat = self.model(x_batch)
+                loss = self.loss_fn(yhat, y_batch)
+                loss.backward()
+                tracking['lr'].append(scheduler.get_last_lr()[0])
+                # Smooting the curve of losses while tracking
+                if iteration == 0:
+                    tracking['loss'].append(loss.item())
+                else:
+                    prev_loss = tracking['loss'][-1]
+                    smoothed_loss = alpha * loss.item() + (1-alpha) * prev_loss
+                    tracking['loss'].append(smoothed_loss)
+                iteration += 1
+                if iteration == num_iter:
+                    break
+                self.optimizer.step()
+                scheduler.step() # change the learning rate to the next new one
+                self.optimizer.zero_grad()
+        
+        # Restores the original state
+        self.optimizer.load_state_dict(previous_states['optimizer'])
+        self.model.load_state_dict(previous_states['model'])
+
+        # Plot
+        if ax is None:
+            fig, ax = plt.subplots(1, 1, figsize=(6,4))
+        else:
+            fig = ax.get_figure()
+        ax.plot(tracking['lr'], tracking['loss'])
+        if step_mode == 'exp':
+            ax.set_xscale('log')
+        ax.set_xlabel('Learning Rate')
+        ax.set_ylabel('Loss')
+        fig.tight_layout()
+        plt.savefig('test.png')
+        return tracking, fig
+    
+    def set_optimizer(self, optimizer):
+        self.optimizer = optimizer 
+
+
+def make_lr_fn(start_lr, end_lr, num_iter, step_mode='exp'):
+    # iteration (list): [0,1,2,...10]
+    if step_mode == 'linear':
+        factor = (end_lr/start_lr - 1) / num_iter 
+        def lr_fn(iteration):
+            return 1 + iteration * factor
+    else:
+        factor = (np.log(end_lr) - np.log(start_lr)) / num_iter
+        def lr_fn(iteration):
+            return np.exp(factor)**iteration 
+    return lr_fn 

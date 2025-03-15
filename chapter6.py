@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader, TensorDataset, random_split
 from torchvision.transforms.v2 import Compose, ToImage, Normalize, ToPILImage, Resize, ToDtype
 from torchvision.datasets import ImageFolder 
 from torch.optim.lr_scheduler import StepLR, ReduceLROnPlateau, MultiStepLR, CyclicLR, LambdaLR 
-# from stepbystep.v2 import StepByStep 
+from stepbystep.v2 import StepByStep 
 from data_generation.rps import download_rps 
 from plots.chapter6 import *
 
@@ -112,39 +112,78 @@ class CNN2(nn.Module):
 # ## Dropout2D - dropping 'channels' instead of 'pixels'
 # fig = figure9(first_images)
 
-## Model config (without dropout)
-torch.manual_seed(13)
-model_cnn2 = CNN2(n_filters=5, p=0.3)
-multi_loss_fn = nn.CrossEntropyLoss(reduction='mean')
-optimizer_cnn2 = optim.Adam(model_cnn2.parameters(), lr=3e-4)
-sbs_cnn2 = StepByStep(model_cnn2, multi_loss_fn, optimizer_cnn2)
-sbs_cnn2.set_loaders(train_loader, val_loader)
-sbs_cnn2.train(10)
-fig = sbs_cnn2.plot_losses()
-print(StepByStep.loader_apply(val_loader, sbs_cnn2.correct))
+# ## Model config (without dropout)
+# torch.manual_seed(13)
+# model_cnn2 = CNN2(n_filters=5, p=0.3)
+# multi_loss_fn = nn.CrossEntropyLoss(reduction='mean')
+# optimizer_cnn2 = optim.Adam(model_cnn2.parameters(), lr=3e-4)
+# sbs_cnn2 = StepByStep(model_cnn2, multi_loss_fn, optimizer_cnn2)
+# sbs_cnn2.set_loaders(train_loader, val_loader)
+# sbs_cnn2.train(10)
+# fig = sbs_cnn2.plot_losses()
+# print(StepByStep.loader_apply(val_loader, sbs_cnn2.correct))
 
-## Model config (with dropout)
-torch.manual_seed(13)
-model_cnn2_nodrop= CNN2(n_filters=5, p=0.0)
-multi_loss_fn = nn.CrossEntropyLoss(reduction='mean')
-optimizer_cnn2_nodrop = optim.Adam(model_cnn2_nodrop.parameters(), lr=3e-4)
-sbs_cnn2_nodrop = StepByStep(model_cnn2_nodrop, multi_loss_fn, optimizer_cnn2_nodrop)
-sbs_cnn2_nodrop.set_loaders(train_loader, val_loader)
-sbs_cnn2_nodrop.train(10)
+# ## Model config (with dropout)
+# torch.manual_seed(13)
+# model_cnn2_nodrop= CNN2(n_filters=5, p=0.0)
+# multi_loss_fn = nn.CrossEntropyLoss(reduction='mean')
+# optimizer_cnn2_nodrop = optim.Adam(model_cnn2_nodrop.parameters(), lr=3e-4)
+# sbs_cnn2_nodrop = StepByStep(model_cnn2_nodrop, multi_loss_fn, optimizer_cnn2_nodrop)
+# sbs_cnn2_nodrop.set_loaders(train_loader, val_loader)
+# sbs_cnn2_nodrop.train(10)
 
-## Compare with dropout and without dropout
-fig = figure11(sbs_cnn2.losses, sbs_cnn2.val_losses, sbs_cnn2_nodrop.losses, sbs_cnn2_nodrop.val_losses)
-print("Correct/Total result for no-dropout-model, 1st is training result, 2nd is validation result: ", 
-      StepByStep.loader_apply(train_loader, sbs_cnn2_nodrop.correct).sum(axis=0),
-      StepByStep.loader_apply(val_loader, sbs_cnn2_nodrop.correct).sum(axis=0)
-      )
-print("Correct/Total result for with-dropout-model, 1st is training result, 2nd is validation result: ",
-      StepByStep.loader_apply(train_loader, sbs_cnn2.correct).sum(axis=0),
-      StepByStep.loader_apply(val_loader, sbs_cnn2.correct).sum(axis=0)
-      )
+# ## Compare with dropout and without dropout
+# fig = figure11(sbs_cnn2.losses, sbs_cnn2.val_losses, sbs_cnn2_nodrop.losses, sbs_cnn2_nodrop.val_losses)
+# print("Correct/Total result for no-dropout-model, 1st is training result, 2nd is validation result: ", 
+#       StepByStep.loader_apply(train_loader, sbs_cnn2_nodrop.correct).sum(axis=0),
+#       StepByStep.loader_apply(val_loader, sbs_cnn2_nodrop.correct).sum(axis=0)
+#       )
+# print("Correct/Total result for with-dropout-model, 1st is training result, 2nd is validation result: ",
+#       StepByStep.loader_apply(train_loader, sbs_cnn2.correct).sum(axis=0),
+#       StepByStep.loader_apply(val_loader, sbs_cnn2.correct).sum(axis=0)
+#       )
 
-## Visualizing Filters
-print("Shape of 1st ConvLayer of DropoutModel: ", model_cnn2.conv1.weight.shape) # [num_filters,num_channels,height,width]=[5,3,3,3]
-fig = sbs_cnn2.visualize_filters('conv1')
+# ## Visualizing Filters
+# print("Shape of 1st ConvLayer of DropoutModel: ", model_cnn2.conv1.weight.shape) # [num_filters,num_channels,height,width]=[5,3,3,3]
+# fig = sbs_cnn2.visualize_filters('conv1')
 # print("Shape of 2nd ConvLayer of DropoutModel: ", model_cnn2.conv2.weight.shape) # [num_filters,num_channels,height,width]=[5,5,3,3]
 # fig = sbs_cnn2.visualize_filters('conv2')
+
+# ## Range of learning rates testing on DummyModel
+# def make_lr_fn(start_lr, end_lr, num_iter, step_mode='exp'):
+#     # iteration (list): [0,1,2,...10]
+#     if step_mode == 'linear':
+#         factor = (end_lr/start_lr - 1) / num_iter 
+#         def lr_fn(iteration):
+#             return 1 + iteration * factor
+#     else:
+#         factor = (np.log(end_lr) - np.log(start_lr)) / num_iter
+#         def lr_fn(iteration):
+#             return np.exp(factor)**iteration 
+#     return lr_fn 
+# start_lr = 0.01
+# end_lr = 0.1
+# num_iter = 10
+# lr_fn = make_lr_fn(start_lr, end_lr, num_iter, step_mode='exp')
+# print("Learning rate list: ", start_lr * lr_fn(np.arange(num_iter+1))) # [0.01, 0.0123, ...., 0.1]
+# dummy_model = CNN2(n_filters=5, p=0.3)
+# dummy_optimizer = optim.Adam(dummy_model.parameters(), lr=start_lr)
+# dummy_scheduler = LambdaLR(dummy_optimizer, lr_lambda=lr_fn)
+# dummy_optimizer.step()
+# dummy_scheduler.step()
+# print("Scheduler current learning rate: ", dummy_scheduler.get_last_lr()[0])
+
+## Range of learning rates testing on DropoutModel
+torch.manual_seed(13)
+new_model = CNN2(n_filters=5, p=0.3)
+multi_loss_fn = nn.CrossEntropyLoss(reduction='mean')
+new_optimizer = optim.Adam(new_model.parameters(), lr=3e-4)
+sbs_new = StepByStep(new_model, multi_loss_fn, new_optimizer)
+tracking, fig = sbs_new.lr_range_test(train_loader, end_lr=0.1, num_iter=100) # choose the learning rate at the inflection point of the U-curve => 0.005
+
+## Set the new optimal learning rate and check the curves
+new_optimizer = optim.Adam(new_model.parameters(), lr=0.005)
+sbs_new.set_optimizer(new_optimizer)
+sbs_new.set_loaders(train_loader, val_loader)
+sbs_new.train(10)
+fig = sbs_new.plot_losses() # training loss actually goes down faster 
