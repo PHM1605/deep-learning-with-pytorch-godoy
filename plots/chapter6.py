@@ -108,3 +108,18 @@ def figure11(losses, val_losses, losses_nodrop, val_losses_nodrop):
     fig.tight_layout()
     plt.savefig('test.png')
     return fig 
+
+def figure15(alpha=1/3, periods=5, steps=10):
+    t = np.arange(1, steps+1)
+    fig, ax = plt.subplots(1, 1, figsize=(6,4))
+    ax.bar(t-1, alpha*(1-alpha)**(t-1), label='EWMA')
+    ax.bar(t-1, [1/periods]*periods+[0]*(10-periods), color='r', alpha=0.3, label='MA')
+    ax.set_xticks(t-1)
+    ax.grid(False)
+    ax.set_xlabel("Lag")
+    ax.set_ylabel("Weight")
+    ax.set_title(r'$EWMA\ \alpha=\frac{1}{3}$ vs MA (5 periods)')
+    ax.legend()
+    fig.tight_layout()
+    plt.savefig("test.png")
+    return fig

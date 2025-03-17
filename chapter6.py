@@ -12,6 +12,7 @@ from torch.optim.lr_scheduler import StepLR, ReduceLROnPlateau, MultiStepLR, Cyc
 from stepbystep.v2 import StepByStep 
 from data_generation.rps import download_rps 
 from plots.chapter6 import *
+from torch_lr_finder import LRFinder
 
 download_rps()
 fig = figure1()
@@ -22,29 +23,29 @@ temp_dataset = ImageFolder(root='rps', transform=temp_transform)
 print("X, y of 1 sample: ", temp_dataset[0][0].shape, temp_dataset[0][1])
 temp_loader = DataLoader(temp_dataset, batch_size=16)
 
-## Check statistics for one batch
-first_images, first_labels = next(iter(temp_loader))
-print("Statistics per channel: ", StepByStep.statistics_per_channel(first_images, first_labels))
-## Check statistics for all batches
-results = StepByStep.loader_apply(temp_loader, StepByStep.statistics_per_channel)
-print("Sum of statistics of all batches: ", results)
-normalizer = StepByStep.make_normalizer(temp_loader)
-print("Normalizer: ", normalizer)
+# ## Check statistics for one batch
+# first_images, first_labels = next(iter(temp_loader))
+# print("Statistics per channel: ", StepByStep.statistics_per_channel(first_images, first_labels))
+# ## Check statistics for all batches
+# results = StepByStep.loader_apply(temp_loader, StepByStep.statistics_per_channel)
+# print("Sum of statistics of all batches: ", results)
+# normalizer = StepByStep.make_normalizer(temp_loader)
+# print("Normalizer: ", normalizer)
 
-## The real dataset 
-composer = Compose([
-    Resize(28),
-    ToImage(),
-    ToDtype(torch.float32, scale=True),
-    normalizer
-])
-train_data = ImageFolder(root='rps', transform=composer)
-val_data = ImageFolder(root='rps-test-set', transform=composer)
-train_loader = DataLoader(train_data, batch_size=16, shuffle=True)
-val_loader = DataLoader(val_data, batch_size=16)
-torch.manual_seed(88)
-first_images, first_labels = next(iter(train_loader))
-fig = figure2(first_images, first_labels)
+# ## The real dataset 
+# composer = Compose([
+#     Resize(28),
+#     ToImage(),
+#     ToDtype(torch.float32, scale=True),
+#     normalizer
+# ])
+# train_data = ImageFolder(root='rps', transform=composer)
+# val_data = ImageFolder(root='rps-test-set', transform=composer)
+# train_loader = DataLoader(train_data, batch_size=16, shuffle=True)
+# val_loader = DataLoader(val_data, batch_size=16)
+# torch.manual_seed(88)
+# first_images, first_labels = next(iter(train_loader))
+# fig = figure2(first_images, first_labels)
 
 class CNN2(nn.Module):
     def __init__(self, n_filters, p=0.0):
@@ -173,17 +174,34 @@ class CNN2(nn.Module):
 # dummy_scheduler.step()
 # print("Scheduler current learning rate: ", dummy_scheduler.get_last_lr()[0])
 
-## Range of learning rates testing on DropoutModel
-torch.manual_seed(13)
-new_model = CNN2(n_filters=5, p=0.3)
-multi_loss_fn = nn.CrossEntropyLoss(reduction='mean')
-new_optimizer = optim.Adam(new_model.parameters(), lr=3e-4)
-sbs_new = StepByStep(new_model, multi_loss_fn, new_optimizer)
-tracking, fig = sbs_new.lr_range_test(train_loader, end_lr=0.1, num_iter=100) # choose the learning rate at the inflection point of the U-curve => 0.005
+# ## Range of learning rates testing on DropoutModel
+# torch.manual_seed(13)
+# new_model = CNN2(n_filters=5, p=0.3)
+# multi_loss_fn = nn.CrossEntropyLoss(reduction='mean')
+# new_optimizer = optim.Adam(new_model.parameters(), lr=3e-4)
+# sbs_new = StepByStep(new_model, multi_loss_fn, new_optimizer)
+# tracking, fig = sbs_new.lr_range_test(train_loader, end_lr=0.1, num_iter=100) # choose the learning rate at the inflection point of the U-curve => 0.005
 
-## Set the new optimal learning rate and check the curves
-new_optimizer = optim.Adam(new_model.parameters(), lr=0.005)
-sbs_new.set_optimizer(new_optimizer)
-sbs_new.set_loaders(train_loader, val_loader)
-sbs_new.train(10)
-fig = sbs_new.plot_losses() # training loss actually goes down faster 
+# ## Set the new optimal learning rate and check the curves
+# new_optimizer = optim.Adam(new_model.parameters(), lr=0.005)
+# sbs_new.set_optimizer(new_optimizer)
+# sbs_new.set_loaders(train_loader, val_loader)
+# sbs_new.train(10)
+# fig = sbs_new.plot_losses() # training loss actually goes down faster  
+
+# ## LRFinder
+# torch.manual_seed(11)
+# new_model = CNN2(n_filters=5, p=0.3)
+# multi_loss_fn = nn.CrossEntropyLoss(reduction='mean')
+# new_optimizer = optim.Adam(new_model.parameters(), lr=3e-4)
+# device = 'cuda' if torch.cuda.is_available() else 'cpu'
+# lr_finder = LRFinder(
+#     new_model, new_optimizer, multi_loss_fn, device=device
+# )
+# lr_finder.range_test(train_loader, end_lr=1e-1, num_iter=100)
+# lr_finder.plot(log_lr=True)
+# lr_finder.reset()
+
+## EWMA
+fig = figure15()
+# To prove: average-age-of-ewma = alpha*sum-over-lag-from-0-to-T-minus-1((1-alpha)**lag*(lag+1)) == 1/alpha
