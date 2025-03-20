@@ -10,6 +10,51 @@ from torchvision.transforms import ToPILImage
 from sklearn.linear_model import LinearRegression 
 from torch.optim.lr_scheduler import StepLR, ReduceLROnPlateau, MultiStepLR, CyclicLR, LambdaLR
 
+def EWMA(past_value, current_value, alpha):
+    return (1-alpha) * past_value + alpha*current_value 
+
+def calc_ewma(values, period):
+    alpha = 2/(period+1)
+    result = []
+    for v in values:
+        try: 
+            prev_value = result[-1]
+        except IndexError:
+            prev_value = 0
+        new_value = EWMA(prev_value, v, alpha)
+        result.append(new_value)
+    return np.array(result)
+
+# for bias-corrected EWMA (for the first few samples)
+def correction(averaged_value, beta, steps):
+    return averaged_value / (1 - beta**steps)
+
+def calc_corrected_ewma(values, period):
+    ewma = calc_ewma(values, period)
+    alpha = 2/(period+1)
+    beta = 1 - alpha 
+    result = []
+    for step, v in enumerate(ewma):
+        adj_value = correction(v, beta, step+1)
+        result.append(adj_value)
+    return np.array(result)
+
+def ma_vs_ewma(values, periods=19):
+    # min_periods: minimum number of observations in window required to have a value
+    # window: size of moving window
+    ma19 = pd.Series(values).rolling(min_periods=0, window=periods).mean()
+    fig, ax = plt.subplots(1, 1, figsize=(6, 4))
+    ax.plot(values, c='k', label='Temperatures')
+    ax.plot(ma19, c='k', linestyle='--', label='MA')
+    ax.plot(calc_ewma(values, periods), c='r', linestyle='--', label='EWMA')
+    ax.plot(calc_corrected_ewma(values, periods), c='r', linestyle='-', label='Bias-corrected EWMA')
+    ax.set_title('MA vs EWMA')
+    ax.set_ylabel('Temperature')
+    ax.set_xlabel('Days')
+    ax.legend(fontsize=12)
+    fig.tight_layout()
+    plt.savefig('test.png')
+    return fig 
 
 def figure1(folder = 'rps'):
     paper = Image.open(f'{folder}/paper/paper02-089.png')

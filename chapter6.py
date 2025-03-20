@@ -205,3 +205,11 @@ class CNN2(nn.Module):
 ## EWMA
 fig = figure15()
 # To prove: average-age-of-ewma = alpha*sum-over-lag-from-0-to-T-minus-1((1-alpha)**lag*(lag+1)) == 1/alpha
+alpha = 1/3
+T = 20
+t = np.arange(1, T+1)
+age = alpha * sum((1-alpha)**(t-1)*t)
+print("Age of EWMA: ", age)
+# Calculation
+temperatures = np.array([5, 11, 15, 6, 5, 3, 3, 0, 0, 3, 4, 2, 1, -1, -2, 2, 2, -2, -1, -1, 3, 4, -1, 2, 6, 4, 9, 11, 9, -2])
+fig = ma_vs_ewma(temperatures, periods=19)
