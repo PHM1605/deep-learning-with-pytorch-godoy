@@ -168,3 +168,35 @@ def figure15(alpha=1/3, periods=5, steps=10):
     fig.tight_layout()
     plt.savefig("test.png")
     return fig
+
+def figure17(gradients, corrected_gradients, corrected_sq_gradients, adapted_gradients):
+    fig, axs = plt.subplots(1, 3, figsize=(15, 5))
+    ax = axs[0]
+    ax.plot(gradients, c='k', label=r'Gradients')
+    ax.plot(corrected_gradients, c='r', linestyle='-', label=r'$Bias-corrected\ EWMA(grad)$')
+    ax.set_title('EWMA for Smoothing')
+    ax.set_ylabel('Gradient')
+    ax.set_xlabel('Mini-batches')
+    ax.set_ylim([-1.5, 1.5])
+    ax.legend(fontsize=12)
+
+    ax = axs[1]
+    ax.plot(1/(np.sqrt(corrected_sq_gradients)+1e-8), c='b', linestyle='-', label=r'$\frac{1}{\sqrt{Bias-corrected\ EWMA(grad^2)}}$')
+    ax.set_title('EWMA for Scaling')
+    ax.set_ylabel('Factor')
+    ax.set_xlabel('Mini-batches')
+    ax.set_ylim([0, 5])
+    ax.legend(fontsize=12)
+
+    ax = axs[2]
+    ax.plot(gradients, c='k', label='Gradients')
+    ax.plot(adapted_gradients, c='g', label='Adapted Gradients')
+    ax.set_title('Gradients')
+    ax.set_ylabel('Gradient')
+    ax.set_xlabel('Mini-batches')
+    ax.set_ylim([-1.5, 1.5])
+    ax.legend(fontsize=12)
+
+    fig.tight_layout()
+    plt.savefig('test.png')
+    return fig

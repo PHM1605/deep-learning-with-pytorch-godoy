@@ -28,6 +28,8 @@ class StepByStep(object):
         ## Hook
         self.visualization = {}
         self.handles = {} 
+        ## Gradients tracking
+        self._gradients = {}
     
     def to(self, device):
         try:
@@ -376,6 +378,29 @@ class StepByStep(object):
     def set_optimizer(self, optimizer):
         self.optimizer = optimizer 
 
+    # layers_to_hook: ['conv1','maxpool1',...] or 'conv1'
+    def capture_gradients(self, layers_to_hook):
+        if not isinstance(layers_to_hook, list):
+            layers_to_hook = [layers_to_hook]
+        modules = list(self.model.named_modules())
+        self._gradients = {} 
+
+        def make_log_fn(name, parm_id):
+            # receive gradients returns modified grads or 'None'
+            def log_fn(grad):
+                self._gradients[name][parm_id].append(grad.tolist())
+                return None
+            return log_fn
+
+        for name, layer in self.model.named_modules():
+            if name in layers_to_hook:
+                self._gradients.update({name: {}}) # {'conv1': {}}
+                for parm_id, p in layer.named_parameters(): # {'conv1': {'weight': [], 'bias'}}
+                    if p.requires_grad:
+                        self._gradients[name].update({parm_id:[]})
+                        log_fn = make_log_fn(name, parm_id)
+                        self.handles[f'{name}.{parm_id}.grad'] = p.register_hook(log_fn)
+        return 
 
 def make_lr_fn(start_lr, end_lr, num_iter, step_mode='exp'):
     # iteration (list): [0,1,2,...10]

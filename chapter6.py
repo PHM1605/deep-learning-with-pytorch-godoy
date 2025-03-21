@@ -13,6 +13,8 @@ from stepbystep.v2 import StepByStep
 from data_generation.rps import download_rps 
 from plots.chapter6 import *
 from torch_lr_finder import LRFinder
+from data_generation.simple_linear_regression import lr_data_generate
+from data_preparation.v2 import prepare_data
 
 download_rps()
 fig = figure1()
@@ -113,9 +115,9 @@ class CNN2(nn.Module):
 # ## Dropout2D - dropping 'channels' instead of 'pixels'
 # fig = figure9(first_images)
 
-# ## Model config (without dropout)
-# torch.manual_seed(13)
-# model_cnn2 = CNN2(n_filters=5, p=0.3)
+## Model config (without dropout)
+torch.manual_seed(13)
+model_cnn2 = CNN2(n_filters=5, p=0.3)
 # multi_loss_fn = nn.CrossEntropyLoss(reduction='mean')
 # optimizer_cnn2 = optim.Adam(model_cnn2.parameters(), lr=3e-4)
 # sbs_cnn2 = StepByStep(model_cnn2, multi_loss_fn, optimizer_cnn2)
@@ -202,14 +204,39 @@ class CNN2(nn.Module):
 # lr_finder.plot(log_lr=True)
 # lr_finder.reset()
 
-## EWMA
-fig = figure15()
-# To prove: average-age-of-ewma = alpha*sum-over-lag-from-0-to-T-minus-1((1-alpha)**lag*(lag+1)) == 1/alpha
-alpha = 1/3
-T = 20
-t = np.arange(1, T+1)
-age = alpha * sum((1-alpha)**(t-1)*t)
-print("Age of EWMA: ", age)
-# Calculation
-temperatures = np.array([5, 11, 15, 6, 5, 3, 3, 0, 0, 3, 4, 2, 1, -1, -2, 2, 2, -2, -1, -1, 3, 4, -1, 2, 6, 4, 9, 11, 9, -2])
-fig = ma_vs_ewma(temperatures, periods=19)
+# ## EWMA
+# fig = figure15()
+# # To prove: average-age-of-ewma = alpha*sum-over-lag-from-0-to-T-minus-1((1-alpha)**lag*(lag+1)) == 1/alpha
+# alpha = 1/3
+# T = 20
+# t = np.arange(1, T+1)
+# age = alpha * sum((1-alpha)**(t-1)*t)
+# print("Age of EWMA: ", age)
+# # Calculation
+# temperatures = np.array([5, 11, 15, 6, 5, 3, 3, 0, 0, 3, 4, 2, 1, -1, -2, 2, 2, -2, -1, -1, 3, 4, -1, 2, 6, 4, 9, 11, 9, -2])
+# fig = ma_vs_ewma(temperatures, periods=19)
+
+## Adam optimizer
+optimizer = optim.Adam(model_cnn2.parameters(), lr=0.1, betas=(0.9, 0.999), eps=1e-8)
+x, y, x_train, y_train, x_val, y_val = lr_data_generate()
+train_data, val_data, train_loader, val_loader = prepare_data(x, y)
+torch.manual_seed(42)
+
+## Prepare model for gradients capturing
+model = nn.Sequential()
+model.add_module('linear', nn.Linear(1,1))
+optimizer = optim.Adam(model.parameters(), lr=0.1)
+loss_fn = nn.MSELoss(reduction='mean')
+sbs_adam = StepByStep(model, loss_fn, optimizer)
+sbs_adam.set_loaders(train_loader)
+sbs_adam.capture_gradients('linear')
+sbs_adam.train(10) # after training we will get {'linear': {'weight': [50 elements], 'bias':[50 elements]}} as each epoch of 10 training-epochs has 5 batches
+sbs_adam.remove_hooks()
+gradients = np.array(sbs_adam._gradients['linear']['weight']).squeeze()
+corrected_gradients = calc_corrected_ewma(gradients, 19)
+corrected_sq_gradients = calc_corrected_ewma(np.power(gradients, 2), 1999)
+adapted_gradients = corrected_gradients/ (np.sqrt(corrected_sq_gradients) + 1e-8)
+fig = figure17(gradients, corrected_gradients, corrected_sq_gradients, adapted_gradients)
+# Optimizer will store last-ewma (no bias-corrected) of 'weight' & last-ewma (no bias-corrected) of 'bias'
+print("Optimizer state dict: ", optimizer.state_dict())
+print("Manual calculated: ", calc_ewma(gradients, 19)[-1], calc_ewma(np.power(gradients,2), 1999)[-1])
