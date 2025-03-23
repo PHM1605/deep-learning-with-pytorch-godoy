@@ -56,6 +56,17 @@ def ma_vs_ewma(values, periods=19):
     plt.savefig('test.png')
     return fig 
 
+def compare_optimizers(model, loss_fn, optimizers, train_loader, val_loader=None, schedulers=None, layers_to_hook='', n_epochs=50):
+    from stepbystep.v3 import StepByStep
+    results = {}
+    model_state = deepcopy(model).state_dict()
+    # optimizers: {'SGD': {'class': optim.SGD, 'parms': {'lr': 0.1}}, 'Adam': {...}}
+    for desc, opt in optimizers.items():
+        model.load_state_dict(model_state)
+        optimizer = opt['class'](model.parameters(), **opt['parms'])
+        sbs = StepByStep(model, loss_fn, optimizer)
+        sbs.set_loaders(train_loader, val_loader)
+
 def figure1(folder = 'rps'):
     paper = Image.open(f'{folder}/paper/paper02-089.png')
     rock = Image.open(f'{folder}/rock/rock06ck02-100.png')

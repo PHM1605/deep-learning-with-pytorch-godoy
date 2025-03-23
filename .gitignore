@@ -1,3 +1,5 @@
 __pycache__
 *.png
-rps*
+rps
+rps-test-set
+*.zip

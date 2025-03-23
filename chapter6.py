@@ -222,21 +222,32 @@ x, y, x_train, y_train, x_val, y_val = lr_data_generate()
 train_data, val_data, train_loader, val_loader = prepare_data(x, y)
 torch.manual_seed(42)
 
-## Prepare model for gradients capturing
+# ## Prepare model for gradients capturing
+# model = nn.Sequential()
+# model.add_module('linear', nn.Linear(1,1))
+# optimizer = optim.Adam(model.parameters(), lr=0.1)
+# loss_fn = nn.MSELoss(reduction='mean')
+# sbs_adam = StepByStep(model, loss_fn, optimizer)
+# sbs_adam.set_loaders(train_loader)
+# sbs_adam.capture_gradients('linear')
+# sbs_adam.train(10) # after training we will get {'linear': {'weight': [50 elements], 'bias':[50 elements]}} as each epoch of 10 training-epochs has 5 batches
+# sbs_adam.remove_hooks()
+# gradients = np.array(sbs_adam._gradients['linear']['weight']).squeeze()
+# corrected_gradients = calc_corrected_ewma(gradients, 19)
+# corrected_sq_gradients = calc_corrected_ewma(np.power(gradients, 2), 1999)
+# adapted_gradients = corrected_gradients/ (np.sqrt(corrected_sq_gradients) + 1e-8)
+# fig = figure17(gradients, corrected_gradients, corrected_sq_gradients, adapted_gradients)
+# # Optimizer will store last-ewma (no bias-corrected) of 'weight' & last-ewma (no bias-corrected) of 'bias'
+# print("Optimizer state dict: ", optimizer.state_dict())
+# print("Manual calculated: ", calc_ewma(gradients, 19)[-1], calc_ewma(np.power(gradients,2), 1999)[-1])
+
+## Viewing weight progression for SGD and Adam
+torch.manual_seed(42)
 model = nn.Sequential()
-model.add_module('linear', nn.Linear(1,1))
-optimizer = optim.Adam(model.parameters(), lr=0.1)
+model.add_module('linear', nn.Linear(1, 1))
 loss_fn = nn.MSELoss(reduction='mean')
-sbs_adam = StepByStep(model, loss_fn, optimizer)
-sbs_adam.set_loaders(train_loader)
-sbs_adam.capture_gradients('linear')
-sbs_adam.train(10) # after training we will get {'linear': {'weight': [50 elements], 'bias':[50 elements]}} as each epoch of 10 training-epochs has 5 batches
-sbs_adam.remove_hooks()
-gradients = np.array(sbs_adam._gradients['linear']['weight']).squeeze()
-corrected_gradients = calc_corrected_ewma(gradients, 19)
-corrected_sq_gradients = calc_corrected_ewma(np.power(gradients, 2), 1999)
-adapted_gradients = corrected_gradients/ (np.sqrt(corrected_sq_gradients) + 1e-8)
-fig = figure17(gradients, corrected_gradients, corrected_sq_gradients, adapted_gradients)
-# Optimizer will store last-ewma (no bias-corrected) of 'weight' & last-ewma (no bias-corrected) of 'bias'
-print("Optimizer state dict: ", optimizer.state_dict())
-print("Manual calculated: ", calc_ewma(gradients, 19)[-1], calc_ewma(np.power(gradients,2), 1999)[-1])
+optimizers = {
+    'SGD': {'class': optim.SGD, 'parms': {'lr': 0.1}},
+    'Adam': {'class': optim.Adam, 'parms': {}'lr': 0.1}
+    }
+results = compare_optimizers(model, loss_fn, optimizers, train_loader, val_loader, n_epochs=10)
