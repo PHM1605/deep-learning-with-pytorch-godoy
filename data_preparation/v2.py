@@ -13,4 +13,4 @@ def prepare_data(x, y):
     train_data, val_data = random_split(dataset, [n_train, n_val])
     train_loader = DataLoader(dataset = train_data, batch_size=16, shuffle=True)
     val_loader = DataLoader(dataset=val_data, batch_size=16)
-    return train_data, val_data, train_loader, val_loader 
+    return x_tensor, y_tensor, train_data, val_data, train_loader, val_loader 

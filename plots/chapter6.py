@@ -66,6 +66,118 @@ def compare_optimizers(model, loss_fn, optimizers, train_loader, val_loader=None
         optimizer = opt['class'](model.parameters(), **opt['parms'])
         sbs = StepByStep(model, loss_fn, optimizer)
         sbs.set_loaders(train_loader, val_loader)
+        try:
+            if schedulers is not None:
+                sched = schedulers[desc]
+                scheduler = sched['class'](optimizer, **sched['parms'])
+                sbs.set_lr_scheduler(scheduler)
+        except KeyError:
+            pass
+
+        sbs.capture_parameters(layers_to_hook)
+        sbs.capture_gradients(layers_to_hook)
+        sbs.train(n_epochs)
+        sbs.remove_hooks()
+
+        parms = deepcopy(sbs._parameters)
+        grads = deepcopy(sbs._gradients)
+        lrs = sbs.learning_rates[:]
+        # e.g. list(map(lambda n: n*2, [1,2,3,4,5])) => [2,4,6,8,10]
+        if not len(lrs):
+            lrs = [ list(map(lambda p: p['lr'], optimizer.state_dict()['param_groups'])) ]
+        results.update({
+            desc: {
+                'parms': parms,
+                'grads': grads,
+                'losses': np.array(sbs.losses),
+                'val_losses': np.array(sbs.val_losses),
+                'state': optimizer.state_dict(),
+                'lrs': lrs
+            }
+        })
+
+    return results
+
+def contour_data(x_tensor, y_tensor):
+    linr = LinearRegression()
+    linr.fit(x_tensor, y_tensor) # each [100,1]
+    b, w = linr.intercept_, linr.coef_[0]
+    b_range = np.linspace(.7, 2.3, 101)
+    w_range = np.linspace(.7, 2.3, 101)
+    bs, ws = np.meshgrid(b_range, w_range) # each [101, 101]
+    all_predictions = np.apply_along_axis(
+        func1d = lambda x: bs+ws*x,
+        axis=1,
+        arr=x_tensor.numpy()
+    ) # apply along axis-1 of x_tensor => from [100,1] to [100,101,101]
+    all_labels = y_tensor.numpy().reshape(-1, 1, 1)
+    all_errors = all_predictions - all_labels 
+    all_losses = (all_errors**2).mean(axis=0)
+    return b, w, bs, ws, all_losses
+
+def plot_paths(results, b, w, bs, ws, all_losses, axs=None):
+    if axs is None:
+        fig, axs = plt.subplots(1, len(results), figsize=(5*len(results), 5)) # axs: [1,1,2]
+    axs = np.atleast_2d(axs)
+    axs = [ax for row in axs for ax in row]
+    # desc: "SGD"/ "Adam"
+    for i, (ax, desc) in enumerate(zip(axs, results.keys())): 
+        # there are 70 weights/biases updates; as there are 5 batches (16 samples) of training, 2 batches of validation; 10 epochs
+        biases = np.array(results[desc]['parms']['']['linear.bias']).squeeze() # [70,1] => squeeze to [70]
+        weights = np.array(results[desc]['parms']['']['linear.weight']).squeeze() # [70,1,1] => squeeze to [70]
+        ax.plot(biases, weights, '-o', linewidth=1, zorder=1, c='k', markersize=4)
+        # Loss surface
+        CS = ax.contour(bs[0,:], ws[:,0], all_losses, cmap=plt.cm.jet, levels=12)
+        ax.clabel(CS, inline=1, fontsize=10)
+        ax.scatter(b, w, c='r', zorder=2, s=40) # optimal b and w value
+        ax.set_xlim([0.7, 2.3])
+        ax.set_ylim([0.7, 2.3])
+        ax.set_xlabel('Bias')
+        ax.set_ylabel('Weight')
+        ax.set_title(desc)
+        ax.label_outer()
+    fig = ax.get_figure()
+    fig.tight_layout()
+    plt.savefig('test.png')
+    return fig 
+
+def plot_losses(results, axs=None):
+    n = len(results.keys()) # ['SGD', 'Adam']
+    if axs is None:
+        fig, axs = plt.subplots(1, n, figsize=(5*n, 4))
+    else:
+        fig = axs[0].get_figure()
+    for ax, k in zip(axs, results.keys()):
+        ax.plot(results[k]['losses'], label='Training Loss', c='b')
+        ax.plot(results[k]['val_losses'], label='Validation Loss', c='r')
+        ax.set_yscale('log')
+        ax.set_xlabel('Epochs')
+        ax.set_ylabel('Loss')
+        ax.set_ylim([1e-3, 1])
+        ax.set_title(k)
+        ax.legend()
+    fig.tight_layout()
+    plt.savefig('test.png')
+    return fig 
+
+# current_value: current GRADIENT value
+def momentum(past_value, current_value, beta):
+    return beta*past_value + current_value
+
+def calc_momentum(values, beta):
+    result = []
+    for v in values:
+        try:
+            prev_value = result[-1]
+        except IndexError:
+            prev_value = 0 
+        new_value = momentum(prev_value, v, beta) 
+        result.append(new_value)
+    return np.array(result) 
+
+def calc_nesterov(values, beta):
+    result = calc_momentum(values, beta)
+    return beta * result + values
 
 def figure1(folder = 'rps'):
     paper = Image.open(f'{folder}/paper/paper02-089.png')
@@ -211,3 +323,10 @@ def figure17(gradients, corrected_gradients, corrected_sq_gradients, adapted_gra
     fig.tight_layout()
     plt.savefig('test.png')
     return fig
+
+def figure21(results):
+    parm = 'linear.weight'
+    fig, axs = plt.subplots(1, 3, figsize=(15, 5))
+    for i, ax in enumerate(axs):
+        desc = list(results.keys())[i] # ['Adam', 'SGD+Momentum']
+        

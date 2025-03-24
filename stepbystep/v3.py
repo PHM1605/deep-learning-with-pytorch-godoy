@@ -17,12 +17,18 @@ class StepByStep(object):
         self.optimizer = optimizer 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.model.to(self.device)
+
         self.train_loader = None 
         self.val_loader = None 
         self.writer = None
+        self.scheduler = None 
+        self.is_batch_lr_scheduler = False 
+
         self.losses = [] 
         self.val_losses = []
+        self.learning_rates = []
         self.total_epochs = 0
+        
         self.train_step_fn = self._make_train_step_fn()
         self.val_step_fn = self._make_val_step_fn()
         ## Hook

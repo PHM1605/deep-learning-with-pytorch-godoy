@@ -16,14 +16,14 @@ from torch_lr_finder import LRFinder
 from data_generation.simple_linear_regression import lr_data_generate
 from data_preparation.v2 import prepare_data
 
-download_rps()
-fig = figure1()
+# download_rps()
+# fig = figure1()
 
-# Pilllow image: RGB
-temp_transform = Compose([Resize(28), ToImage(), ToDtype(torch.float32, scale=True)])
-temp_dataset = ImageFolder(root='rps', transform=temp_transform)
-print("X, y of 1 sample: ", temp_dataset[0][0].shape, temp_dataset[0][1])
-temp_loader = DataLoader(temp_dataset, batch_size=16)
+# # Pilllow image: RGB
+# temp_transform = Compose([Resize(28), ToImage(), ToDtype(torch.float32, scale=True)])
+# temp_dataset = ImageFolder(root='rps', transform=temp_transform)
+# print("X, y of 1 sample: ", temp_dataset[0][0].shape, temp_dataset[0][1])
+# temp_loader = DataLoader(temp_dataset, batch_size=16)
 
 # ## Check statistics for one batch
 # first_images, first_labels = next(iter(temp_loader))
@@ -219,10 +219,10 @@ model_cnn2 = CNN2(n_filters=5, p=0.3)
 ## Adam optimizer
 optimizer = optim.Adam(model_cnn2.parameters(), lr=0.1, betas=(0.9, 0.999), eps=1e-8)
 x, y, x_train, y_train, x_val, y_val = lr_data_generate()
-train_data, val_data, train_loader, val_loader = prepare_data(x, y)
-torch.manual_seed(42)
+x_tensor, y_tensor, train_data, val_data, train_loader, val_loader = prepare_data(x, y)
 
 # ## Prepare model for gradients capturing
+# torch.manual_seed(42)
 # model = nn.Sequential()
 # model.add_module('linear', nn.Linear(1,1))
 # optimizer = optim.Adam(model.parameters(), lr=0.1)
@@ -241,13 +241,40 @@ torch.manual_seed(42)
 # print("Optimizer state dict: ", optimizer.state_dict())
 # print("Manual calculated: ", calc_ewma(gradients, 19)[-1], calc_ewma(np.power(gradients,2), 1999)[-1])
 
-## Viewing weight progression for SGD and Adam
+b, w, bs, ws, all_losses = contour_data(x_tensor, y_tensor)
+
+# ## Viewing weight progression for SGD and Adam
+# torch.manual_seed(42)
+# model = nn.Sequential()
+# model.add_module('linear', nn.Linear(1, 1))
+# loss_fn = nn.MSELoss(reduction='mean')
+# optimizers = {
+#     'SGD': {'class': optim.SGD, 'parms': {'lr': 0.1}},
+#     'Adam': {'class': optim.Adam, 'parms': {'lr': 0.1}}
+#     }
+# results = compare_optimizers(model, loss_fn, optimizers, train_loader, val_loader, n_epochs=10)
+# fig = plot_paths(results, b, w, bs, ws, all_losses)
+# fig = plot_losses(results)
+
+# ## Momentum: momentum_t = beta*momentum_(t-1) + grad_t = grad_t + beta*grad_(t-1) + beta^2*grad_(t-2)+....
+# # Momentum with dampening factor: momentum_t = beta*momentum_(t-1) + (1-damp)*grad_t
+# # => param_t = param_(t-1) - eta*momentum_t
+# torch.manual_seed(42)
+# model = nn.Sequential()
+# model.add_module('linear', nn.Linear(1,1))
+# loss_fn = nn.MSELoss(reduction='mean')
+# optimizers = {
+#     'SGD': {'class': optim.SGD, 'parms': {'lr':0.1}},
+#     'SGD+Momentum': {'class': optim.SGD, 'parms': {'lr':0.1, 'momentum':0.9}}
+# }
+# results = compare_optimizers(model, loss_fn, optimizers, train_loader, val_loader, n_epochs=10)
+# print("SGD+Momentum state dict: ", results['SGD+Momentum']['state'])
+# fig = plot_paths(results, b, w, bs, ws, all_losses)
+
+## Nesterov accelerated gradient
+# momentum_t = beta*momentum_(t-1) + grad_t
+# nesterov_t = beta*momentum_t + grad_t 
+# => param_t = param_(t-1) - eta*nesterov_t = param_(t-1) - eta*grad_t - eta*beta*momentum_t
 torch.manual_seed(42)
 model = nn.Sequential()
-model.add_module('linear', nn.Linear(1, 1))
-loss_fn = nn.MSELoss(reduction='mean')
-optimizers = {
-    'SGD': {'class': optim.SGD, 'parms': {'lr': 0.1}},
-    'Adam': {'class': optim.Adam, 'parms': {}'lr': 0.1}
-    }
-results = compare_optimizers(model, loss_fn, optimizers, train_loader, val_loader, n_epochs=10)
+model.add_module()
