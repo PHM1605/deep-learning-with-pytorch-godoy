@@ -329,4 +329,20 @@ def figure21(results):
     fig, axs = plt.subplots(1, 3, figsize=(15, 5))
     for i, ax in enumerate(axs):
         desc = list(results.keys())[i] # ['Adam', 'SGD+Momentum']
-        
+        gradients = np.array(results[desc]['grads'][''][parm]).squeeze()
+        momentums = calc_momentum(gradients, 0.9)
+        nesterovs = calc_nesterov(gradients, 0.9)
+        ax.plot(gradients, c='k', label='Gradients')
+        if i>0:
+            ax.plot(momentums, c='r', label='Momentums')
+        if i>1:
+            ax.plot(nesterovs, c='b', label='Nesterov Momentums')
+        ax.set_title(desc)
+        ax.set_ylabel('Gradient')
+        ax.set_xlabel('Mini-batches')
+        ax.set_ylim([-2, 1.5])
+        ax.legend(fontsize=12)
+    fig.tight_layout()
+    plt.savefig('test.png')
+    return fig 
+    

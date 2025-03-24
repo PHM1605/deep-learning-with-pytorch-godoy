@@ -277,4 +277,17 @@ b, w, bs, ws, all_losses = contour_data(x_tensor, y_tensor)
 # => param_t = param_(t-1) - eta*nesterov_t = param_(t-1) - eta*grad_t - eta*beta*momentum_t
 torch.manual_seed(42)
 model = nn.Sequential()
-model.add_module()
+model.add_module('linear', nn.Linear(1, 1))
+loss_fn = nn.MSELoss(reduction='mean')
+optimizers = {
+    'SGD': {'class': optim.SGD, 'parms': {'lr': 0.1}},
+    'SGD+Momentum': {'class': optim.SGD, 'parms': {'lr':0.1, 'momentum':0.9}},
+    'SGD+Nesterov': {'class': optim.SGD, 'parms': {'lr':0.1, 'momentum':0.9, 'nesterov':True}}
+}
+results = compare_optimizers(model, loss_fn, optimizers, train_loader, val_loader, n_epochs=10)
+# gradients, momentums and nesterovs
+fig = figure21(results)
+# loss contour and weight map update
+fig = plot_paths(results, b, w, bs, ws, all_losses)
+# loss curve over 10 epochs
+fig = plot_losses(results)
