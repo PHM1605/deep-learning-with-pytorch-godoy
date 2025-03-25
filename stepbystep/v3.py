@@ -36,7 +36,11 @@ class StepByStep(object):
         self.handles = {} 
         ## Gradients tracking
         self._gradients = {}
-    
+        ## Learning-rate scheduler
+        self.scheduler = None
+        self.is_batch_lr_scheduler = False # changing learning-rate after each batch or each epoch
+        self.learning_rates = []
+
     def to(self, device):
         try:
             self.device = device 
@@ -113,6 +117,10 @@ class StepByStep(object):
             with torch.no_grad():
                 val_loss = self._mini_batch(validation=True)
                 self.val_losses.append(val_loss)
+            
+            # Set learning rate scheduler
+            self._epoch_schedulers(val_loss)
+            
             if self.writer:
                 scalars = {'training': loss}
                 if val_loss is not None:
@@ -239,7 +247,7 @@ class StepByStep(object):
             handle.remove()
         self.handles = {}
     
-    # layers: list of names ['conv1', 'relu1', ...]
+    # layers: liuyst of names ['conv1', 'relu1', ...]
     def visualize_outputs(self, layers, n_images=10, y=None, yhat=None):
         # condition of filter: l, which is each component of "layers", is in the list of keys stored in "visualization"
         layers = filter(lambda l: l in self.visualization.keys(), layers)
@@ -430,6 +438,35 @@ class StepByStep(object):
                 
         self.attach_hooks(layers_to_hook, fw_hook_fn)
         return
+    
+    def set_lr_scheduler(self, scheduler):
+        # Make sure the scheduler in the argument is the scheduler we are using in this class 
+        if scheduler.optimizer == self.optimizer:
+            self.scheduler = scheduler 
+            if (isinstance(scheduler, optim.lr_scheduler.CyclicLR)
+                or isinstance(scheduler, optim.lr_scheduler.OneCycleLR)
+                or isinstance(scheduler, optim.lr_scheduler.CosineAnnealingWarmRestarts)
+            ):
+                self.is_batch_lr_scheduler = True 
+            else:
+                self.is_batch_lr_scheduler = False
+
+    def _epoch_schedulers(self, val_loss):
+        if self.scheduler and not self.is_batch_lr_scheduler:
+            # if val_loss too small then reduce LR
+            if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                self.scheduler.step(val_loss)
+            else:
+                self.scheduler.step()
+            
+            current_lr = list(map(
+                lambda d: d['lr'], 
+                self.scheduler.optimizer.state_dict()['param_groups']
+            ))
+            self.learning_rates.append(current_lr)
+
+
+
 
 def make_lr_fn(start_lr, end_lr, num_iter, step_mode='exp'):
     # iteration (list): [0,1,2,...10]

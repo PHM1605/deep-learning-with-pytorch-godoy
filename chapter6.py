@@ -271,23 +271,45 @@ b, w, bs, ws, all_losses = contour_data(x_tensor, y_tensor)
 # print("SGD+Momentum state dict: ", results['SGD+Momentum']['state'])
 # fig = plot_paths(results, b, w, bs, ws, all_losses)
 
-## Nesterov accelerated gradient
-# momentum_t = beta*momentum_(t-1) + grad_t
-# nesterov_t = beta*momentum_t + grad_t 
-# => param_t = param_(t-1) - eta*nesterov_t = param_(t-1) - eta*grad_t - eta*beta*momentum_t
-torch.manual_seed(42)
-model = nn.Sequential()
-model.add_module('linear', nn.Linear(1, 1))
-loss_fn = nn.MSELoss(reduction='mean')
-optimizers = {
-    'SGD': {'class': optim.SGD, 'parms': {'lr': 0.1}},
-    'SGD+Momentum': {'class': optim.SGD, 'parms': {'lr':0.1, 'momentum':0.9}},
-    'SGD+Nesterov': {'class': optim.SGD, 'parms': {'lr':0.1, 'momentum':0.9, 'nesterov':True}}
-}
-results = compare_optimizers(model, loss_fn, optimizers, train_loader, val_loader, n_epochs=10)
-# gradients, momentums and nesterovs
-fig = figure21(results)
-# loss contour and weight map update
-fig = plot_paths(results, b, w, bs, ws, all_losses)
-# loss curve over 10 epochs
-fig = plot_losses(results)
+# ## Nesterov accelerated gradient
+# # momentum_t = beta*momentum_(t-1) + grad_t
+# # nesterov_t = beta*momentum_t + grad_t 
+# # => param_t = param_(t-1) - eta*nesterov_t = param_(t-1) - eta*grad_t - eta*beta*momentum_t
+# torch.manual_seed(42)
+# model = nn.Sequential()
+# model.add_module('linear', nn.Linear(1, 1))
+# loss_fn = nn.MSELoss(reduction='mean')
+# optimizers = {
+#     'SGD': {'class': optim.SGD, 'parms': {'lr': 0.1}},
+#     'SGD+Momentum': {'class': optim.SGD, 'parms': {'lr':0.1, 'momentum':0.9}},
+#     'SGD+Nesterov': {'class': optim.SGD, 'parms': {'lr':0.1, 'momentum':0.9, 'nesterov':True}}
+# }
+# results = compare_optimizers(model, loss_fn, optimizers, train_loader, val_loader, n_epochs=10)
+# # gradients, momentums and nesterovs
+# fig = figure21(results)
+# # loss contour and weight map update
+# fig = plot_paths(results, b, w, bs, ws, all_losses)
+# # loss curve over 10 epochs
+# fig = plot_losses(results)
+
+## Learning Rate Schedulers
+# Scheduler multiplies 0.1 every 2 epochs
+dummy_optimizer = optim.SGD([nn.Parameter(torch.randn(1))], lr=0.01)
+dummy_scheduler = StepLR(dummy_optimizer, step_size=2, gamma=0.1)
+print("Learning rate every 2 epochs: ")
+for epoch in range(4):
+    print(dummy_scheduler.get_last_lr())
+    dummy_optimizer.step()
+    dummy_scheduler.step()
+    dummy_optimizer.zero_grad()
+# Scheduler sets the learning rate based on a function
+# this is the same as StepLR(dummy_optimizer, step_size=2, gamma=0.1)
+dummy_optimizer = optim.SGD([nn.Parameter(torch.randn(1))], lr=0.01)
+dummy_scheduler = LambdaLR(
+    dummy_optimizer, lr_lambda = lambda epoch: 0.1**(epoch//2)
+)
+fig = plot_scheduler(dummy_optimizer, dummy_scheduler)
+# Scheduler based on not-good-enough improvement over 'patience' epochs in validation loss
+dummy_optimizer = optim.SGD([nn.Parameter(torch.randn(1))], lr=0.01)
+dummy_scheduler = ReduceLROnPlateau(dummy_optimizer,patience=4, factor=0.1)
+fig = plot_scheduler(dummy_optimizer, dummy_scheduler)

@@ -224,6 +224,32 @@ def plot_dist(ax, distrib_outputs, p):
     ax.plot([mean_value, mean_value], [0, 500], c='r', linestyle='--', label='Mean={:.2f}'.format(mean_value))
     ax.legend()
 
+def plot_scheduler(dummy_optimizer, dummy_scheduler, logscale=True, ax=None):
+    learning_rates = []
+    for i in range(12):
+        current_lr = list(map(lambda d: d['lr'], dummy_scheduler.optimizer.state_dict()['param_groups']))
+        learning_rates.append(current_lr)
+        dummy_optimizer.step()    
+        if isinstance(dummy_scheduler, ReduceLROnPlateau):
+            dummy_loss = 0.1
+            dummy_scheduler.step(dummy_loss)
+        else:
+            dummy_scheduler.step()
+    
+    if ax is None:
+        fig, ax = plt.subplots(1, 1, figsize=(5,4))
+
+    ax.plot(learning_rates)
+    if logscale:
+        ax.set_yscale('log')
+    ax.set_xlabel('Steps')
+    ax.set_ylabel('Learning Rate')
+    ax.set_title(type(dummy_scheduler).__name__)
+    fig = ax.get_figure()
+    fig.tight_layout()
+    plt.savefig('test.png')
+    return fig 
+
 # ps: set of dropout probabilities
 def figure8(ps=(0.1, 0.3, 0.5, 0.9)):
     spaced_points = torch.linspace(0.1, 1.1, 11)
