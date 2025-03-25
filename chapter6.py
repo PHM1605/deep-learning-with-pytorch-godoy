@@ -292,24 +292,55 @@ b, w, bs, ws, all_losses = contour_data(x_tensor, y_tensor)
 # # loss curve over 10 epochs
 # fig = plot_losses(results)
 
-## Learning Rate Schedulers
-# Scheduler multiplies 0.1 every 2 epochs
-dummy_optimizer = optim.SGD([nn.Parameter(torch.randn(1))], lr=0.01)
-dummy_scheduler = StepLR(dummy_optimizer, step_size=2, gamma=0.1)
-print("Learning rate every 2 epochs: ")
-for epoch in range(4):
-    print(dummy_scheduler.get_last_lr())
-    dummy_optimizer.step()
-    dummy_scheduler.step()
-    dummy_optimizer.zero_grad()
-# Scheduler sets the learning rate based on a function
-# this is the same as StepLR(dummy_optimizer, step_size=2, gamma=0.1)
-dummy_optimizer = optim.SGD([nn.Parameter(torch.randn(1))], lr=0.01)
-dummy_scheduler = LambdaLR(
-    dummy_optimizer, lr_lambda = lambda epoch: 0.1**(epoch//2)
-)
-fig = plot_scheduler(dummy_optimizer, dummy_scheduler)
-# Scheduler based on not-good-enough improvement over 'patience' epochs in validation loss
-dummy_optimizer = optim.SGD([nn.Parameter(torch.randn(1))], lr=0.01)
-dummy_scheduler = ReduceLROnPlateau(dummy_optimizer,patience=4, factor=0.1)
-fig = plot_scheduler(dummy_optimizer, dummy_scheduler)
+# ## Learning Rate Schedulers
+# # Scheduler multiplies 0.1 every 2 epochs
+# dummy_optimizer = optim.SGD([nn.Parameter(torch.randn(1))], lr=0.01)
+# dummy_scheduler = StepLR(dummy_optimizer, step_size=2, gamma=0.1)
+# print("Learning rate every 2 epochs: ")
+# for epoch in range(4):
+#     print(dummy_scheduler.get_last_lr())
+#     dummy_optimizer.step()
+#     dummy_scheduler.step()
+#     dummy_optimizer.zero_grad()
+# # Scheduler sets the learning rate based on a function
+# # this is the same as StepLR(dummy_optimizer, step_size=2, gamma=0.1)
+# dummy_optimizer = optim.SGD([nn.Parameter(torch.randn(1))], lr=0.01)
+# dummy_scheduler = LambdaLR(
+#     dummy_optimizer, lr_lambda = lambda epoch: 0.1**(epoch//2)
+# )
+# fig = plot_scheduler(dummy_optimizer, dummy_scheduler)
+# # Scheduler based on not-good-enough improvement over 'patience' epochs in validation loss
+# dummy_optimizer = optim.SGD([nn.Parameter(torch.randn(1))], lr=0.01)
+# dummy_scheduler = ReduceLROnPlateau(dummy_optimizer,patience=4, factor=0.1)
+# fig = plot_scheduler(dummy_optimizer, dummy_scheduler)
+# # Mini-batch Scheduler
+# dummy_parm = [nn.Parameter(torch.randn(1))]
+# dummy_optimizer = optim.SGD(dummy_parm, lr=0.01)
+# dummy_scheduler1 = CyclicLR(dummy_optimizer, base_lr=1e-4, max_lr=1e-3, step_size_up=2, mode='triangular')
+# dummy_scheduler2 = CyclicLR(dummy_optimizer, base_lr=1e-4, max_lr=1e-3, step_size_up=2, mode='triangular2') # peak of trianglles halving every 2 batches
+# dummy_scheduler3 = CyclicLR(dummy_optimizer, base_lr=1e-4, max_lr=1e-3, step_size_up=2, mode='exp_range', gamma=np.sqrt(0.5)) # peak of triangles are reduced exponentially every 2 batches
+# fig = figure26(dummy_optimizer, (dummy_scheduler1, dummy_scheduler2, dummy_scheduler3))
+
+# ## LR Range Test to find the best LR
+# fig, axs = plt.subplots(1, 2, figsize=(10, 4))
+# for ax, nesterov in zip(axs.flat, [False, True]):
+#     torch.manual_seed(42)
+#     model = nn.Sequential()
+#     model.add_module('linear', nn.Linear(1, 1))
+#     loss_fn = nn.MSELoss(reduction='mean')
+#     optimizer = optim.SGD(
+#         model.parameters(), lr=1e-3, momentum=0.9, nesterov=nesterov
+#     )
+#     sbs_scheduler = StepByStep(model, loss_fn, optimizer)
+#     tracking, fig = sbs_scheduler.lr_range_test(train_loader, end_lr=1, num_iter=100, ax=ax)
+#     nest = ' + Nesterov' if nesterov else ''
+#     ax.set_title(f'Momentum{nest}')
+
+## Combining all gradients-with-momentum+nesterov and learning-rate-scheduler WHEN training weights
+# from the above curves we choose the elbow point as optimal base learning-rate i.e. 0.025
+step_scheduler = StepLR(optimizer, step_size=4, gamma=0.5) # per-epoch-scheduler: halving learning rate after 4 epochs
+cyclic_scheduler = CyclicLR(
+    optimizer, base_lr=0.025, max_lr=1, step_size_up=10, mode='triangular2'
+) # per-batch-scheduler
+
+

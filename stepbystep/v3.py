@@ -88,12 +88,18 @@ class StepByStep(object):
             step_fn = self.train_step_fn 
         if data_loader is None:
             return None 
+
+        n_batches = len(data_loader)
         mini_batch_losses = []
-        for x_batch, y_batch in data_loader:
+        for i, (x_batch, y_batch) in enumerate(data_loader):
             x_batch = x_batch.to(self.device)
             y_batch = y_batch.to(self.device)
             mini_batch_loss = step_fn(x_batch, y_batch)
             mini_batch_losses.append(mini_batch_loss)
+
+            if not validation: # training
+                self._mini_batch_schedulers(i/n_batches) # change learning rate if batch scheduler is enabled
+
         loss = np.mean(mini_batch_losses)
         return loss 
     
@@ -465,7 +471,16 @@ class StepByStep(object):
             ))
             self.learning_rates.append(current_lr)
 
-
+    def _mini_batch_schedulers(self, frac_epoch):
+        if self.scheduler and self.is_batch_lr_scheduler:
+            if isinstance(self.scheduler, torch.optim.lr_scheduler.CosineAnnealingWarmRestarts):
+                self.scheduler.step(self.total_epochs + frac_epoch)
+            else:
+                self.scheduler.step() 
+            current_lr = list(map(
+                lambda d: d['lr'], self.scheduler.state_dict()['param_groups']
+            ))
+            self.learning_rates.append(current_lr)
 
 
 def make_lr_fn(start_lr, end_lr, num_iter, step_mode='exp'):

@@ -372,3 +372,18 @@ def figure21(results):
     plt.savefig('test.png')
     return fig 
     
+def figure26(dummy_optimizer, dummy_schedulers):
+    fig, axs = plt.subplots(1, 3, figsize=(15,4))
+    fig = plot_scheduler(dummy_optimizer, dummy_schedulers[0], ax=axs[0], logscale=False)
+    fig = plot_scheduler(dummy_optimizer, dummy_schedulers[1], ax=axs[1], logscale=False)
+    fig = plot_scheduler(dummy_optimizer, dummy_schedulers[2], ax=axs[2], logscale=False)
+    axs[0].set_ylim([9e-5, 1e-3])
+    axs[1].set_ylim([9e-5, 1e-3])
+    axs[2].set_ylim([9e-5, 1e-3])
+    axs[0].set_title('CyclicLR - mode=triangular')
+    axs[1].set_title('CyclicLR - mode=triangular2')
+    axs[2].set_title('CyclicLR - mode=exp_range')
+    fig.tight_layout()
+    plt.savefig('test.png')
+    return fig 
+
