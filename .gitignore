@@ -3,3 +3,5 @@ __pycache__
 rps
 rps-test-set
 *.zip
+pretrained
+*.pth
