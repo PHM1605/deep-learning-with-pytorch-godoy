@@ -3,6 +3,7 @@ import datetime, random, torch
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 import torch.nn as nn
+import torch.optim as optim
 import torch.nn.functional as F
 from torchvision.transforms.v2 import Normalize
 from copy import deepcopy
@@ -478,7 +479,7 @@ class StepByStep(object):
             else:
                 self.scheduler.step() 
             current_lr = list(map(
-                lambda d: d['lr'], self.scheduler.state_dict()['param_groups']
+                lambda d: d['lr'], self.scheduler.optimizer.state_dict()['param_groups']
             ))
             self.learning_rates.append(current_lr)
 

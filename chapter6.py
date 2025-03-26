@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader, TensorDataset, random_split
 from torchvision.transforms.v2 import Compose, ToImage, Normalize, ToPILImage, Resize, ToDtype
 from torchvision.datasets import ImageFolder 
 from torch.optim.lr_scheduler import StepLR, ReduceLROnPlateau, MultiStepLR, CyclicLR, LambdaLR 
-from stepbystep.v2 import StepByStep 
+from stepbystep.v3 import StepByStep 
 from data_generation.rps import download_rps 
 from plots.chapter6 import *
 from torch_lr_finder import LRFinder
@@ -86,7 +86,7 @@ class CNN2(nn.Module):
         x = self.featurizer(x)
         x = self.classifier(x)
         return x 
-    
+
 # ## Dropout
 # dropping_model = nn.Sequential(nn.Dropout(p=0.5))
 # spaced_points = torch.linspace(0.1, 1.1, 11)
@@ -115,9 +115,9 @@ class CNN2(nn.Module):
 # ## Dropout2D - dropping 'channels' instead of 'pixels'
 # fig = figure9(first_images)
 
-## Model config (without dropout)
-torch.manual_seed(13)
-model_cnn2 = CNN2(n_filters=5, p=0.3)
+# ## Model config (without dropout)
+# torch.manual_seed(13)
+# model_cnn2 = CNN2(n_filters=5, p=0.3)
 # multi_loss_fn = nn.CrossEntropyLoss(reduction='mean')
 # optimizer_cnn2 = optim.Adam(model_cnn2.parameters(), lr=3e-4)
 # sbs_cnn2 = StepByStep(model_cnn2, multi_loss_fn, optimizer_cnn2)
@@ -216,10 +216,10 @@ model_cnn2 = CNN2(n_filters=5, p=0.3)
 # temperatures = np.array([5, 11, 15, 6, 5, 3, 3, 0, 0, 3, 4, 2, 1, -1, -2, 2, 2, -2, -1, -1, 3, 4, -1, 2, 6, 4, 9, 11, 9, -2])
 # fig = ma_vs_ewma(temperatures, periods=19)
 
-## Adam optimizer
-optimizer = optim.Adam(model_cnn2.parameters(), lr=0.1, betas=(0.9, 0.999), eps=1e-8)
-x, y, x_train, y_train, x_val, y_val = lr_data_generate()
-x_tensor, y_tensor, train_data, val_data, train_loader, val_loader = prepare_data(x, y)
+# ## Adam optimizer
+# optimizer = optim.Adam(model_cnn2.parameters(), lr=0.1, betas=(0.9, 0.999), eps=1e-8)
+# x, y, x_train, y_train, x_val, y_val = lr_data_generate()
+# x_tensor, y_tensor, train_data, val_data, train_loader, val_loader = prepare_data(x, y)
 
 # ## Prepare model for gradients capturing
 # torch.manual_seed(42)
@@ -241,7 +241,7 @@ x_tensor, y_tensor, train_data, val_data, train_loader, val_loader = prepare_dat
 # print("Optimizer state dict: ", optimizer.state_dict())
 # print("Manual calculated: ", calc_ewma(gradients, 19)[-1], calc_ewma(np.power(gradients,2), 1999)[-1])
 
-b, w, bs, ws, all_losses = contour_data(x_tensor, y_tensor)
+# b, w, bs, ws, all_losses = contour_data(x_tensor, y_tensor)
 
 # ## Viewing weight progression for SGD and Adam
 # torch.manual_seed(42)
@@ -336,11 +336,64 @@ b, w, bs, ws, all_losses = contour_data(x_tensor, y_tensor)
 #     nest = ' + Nesterov' if nesterov else ''
 #     ax.set_title(f'Momentum{nest}')
 
-## Combining all gradients-with-momentum+nesterov and learning-rate-scheduler WHEN training weights
-# from the above curves we choose the elbow point as optimal base learning-rate i.e. 0.025
-step_scheduler = StepLR(optimizer, step_size=4, gamma=0.5) # per-epoch-scheduler: halving learning rate after 4 epochs
-cyclic_scheduler = CyclicLR(
-    optimizer, base_lr=0.025, max_lr=1, step_size_up=10, mode='triangular2'
-) # per-batch-scheduler
+# ## Combining all gradients-with-momentum+nesterov and learning-rate-scheduler WHEN training weights
+# # from the above curves we choose the elbow point as optimal base learning-rate i.e. 0.025
+# step_scheduler = StepLR(optimizer, step_size=4, gamma=0.5) # per-epoch-scheduler: halving learning rate after 4 epochs
+# cyclic_scheduler = CyclicLR(
+#     optimizer, base_lr=0.025, max_lr=1, step_size_up=10, mode='triangular2'
+# ) # per-batch-scheduler
+# torch.manual_seed(42)
+# model = nn.Sequential()
+# model.add_module('linear', nn.Linear(1,1))
+# loss_fn = nn.MSELoss(reduction='mean')
+# optimizers = {
+#     'SGD+Momentum': {'class':optim.SGD, 'parms': {'lr':0.1, 'momentum':0.9}},
+#     'SGD+Momentum+Step':{'class':optim.SGD, 'parms':{'lr':0.1, 'momentum':0.9}},
+#     'SGD+Momentum+Cycle':{'class':optim.SGD, 'parms':{'lr':0.1, 'momentum':0.9}},
+#     'SGD+Nesterov': {'class':optim.SGD, 'parms':{'lr':0.1, 'momentum':0.9, 'nesterov':True}},
+#     'SGD+Nesterov+Step':{'class':optim.SGD, 'parms':{'lr':0.1, 'momentum':0.9, 'nesterov':True}},
+#     'SGD+Nesterov+Cycle':{'class':optim.SGD, 'parms':{'lr':0.1, 'momentum':0.9, 'nesterov':True}}
+# }
+# schedulers = {
+#     'SGD+Momentum+Step': {'class':StepLR, 'parms': {'step_size':4, 'gamma':0.5}},
+#     'SGD+Momentum+Cycle': {'class':CyclicLR, 'parms': {'base_lr':0.025, 'max_lr':0.1, 'step_size_up':10, 'mode':'triangular2'}},
+#     'SGD+Nesterov+Step': {'class':StepLR, 'parms': {'step_size':4, 'gamma':0.5}},
+#     'SGD+Nesterov+Cycle': {'class':CyclicLR, 'parms': {'base_lr':0.025, 'max_lr':0.1, 'step_size_up':10, 'mode':'triangular2'}}
+# }
+# results = compare_optimizers(model, loss_fn, optimizers, train_loader, val_loader, schedulers, n_epochs=10)
+# fig = figure28(results, b, w, bs, ws, all_losses)
+# # loss progression
+# fig, axs = plt.subplots(2, 3, figsize=(15, 8))
+# axs = axs.flat 
+# fig = plot_losses(results, axs)
 
-
+## Putting all together
+temp_transform = Compose([Resize(28), ToImage(), ToDtype(torch.float32, scale=True)])
+temp_dataset = ImageFolder(root='rps', transform=temp_transform)
+temp_loader = DataLoader(temp_dataset, batch_size=16)
+normalizer = StepByStep.make_normalizer(temp_loader)
+composer = Compose([Resize(28), ToImage(), ToDtype(torch.float32, scale=True), normalizer])
+train_data = ImageFolder(root='rps', transform=composer)
+val_data = ImageFolder(root='rps-test-set', transform=composer)
+train_loader = DataLoader(train_data, batch_size=16, shuffle=True)
+val_loader = DataLoader(val_data, batch_size=16)
+torch.manual_seed(13)
+model_cnn3 = CNN2(n_filters=5, p=0.5)
+multi_loss_fn = nn.CrossEntropyLoss(reduction='mean')
+optimizer_cnn3 = optim.SGD(model_cnn3.parameters(), lr=1e-3, momentum=0.9, nesterov=True)
+sbs_cnn3 = StepByStep(model_cnn3, multi_loss_fn, optimizer_cnn3)
+tracking, fig = sbs_cnn3.lr_range_test(train_loader, end_lr=2e-1, num_iter=100) 
+# from the lr_range_test => we choose base learning rate at elbow point = 0.025
+optimizer_cnn3 = optim.SGD(model_cnn3.parameters(), lr=0.025, momentum=0.9, nesterov=True)
+sbs_cnn3.set_optimizer(optimizer_cnn3)
+# step_size_up = number of batches in 1 epoch means the cyclic learning rate period is 2 epochs
+scheduler = CyclicLR(optimizer_cnn3, base_lr=1e-3, max_lr=0.025, step_size_up=len(train_loader), mode='triangular2')
+sbs_cnn3.set_lr_scheduler(scheduler)
+sbs_cnn3.set_loaders(train_loader, val_loader)
+sbs_cnn3.train(10)
+fig = sbs_cnn3.plot_losses()
+print("Training and validation recall: ")
+print(
+    StepByStep.loader_apply(train_loader, sbs_cnn3.correct).sum(axis=0),
+    StepByStep.loader_apply(val_loader, sbs_cnn3.correct).sum(axis=0)
+)

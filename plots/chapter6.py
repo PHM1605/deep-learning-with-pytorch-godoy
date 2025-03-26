@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from copy import deepcopy
 from PIL import Image 
-from stepbystep.v2 import StepByStep 
+from stepbystep.v3 import StepByStep 
 from torchvision.transforms import ToPILImage 
 from sklearn.linear_model import LinearRegression 
 from torch.optim.lr_scheduler import StepLR, ReduceLROnPlateau, MultiStepLR, CyclicLR, LambdaLR
@@ -57,7 +57,6 @@ def ma_vs_ewma(values, periods=19):
     return fig 
 
 def compare_optimizers(model, loss_fn, optimizers, train_loader, val_loader=None, schedulers=None, layers_to_hook='', n_epochs=50):
-    from stepbystep.v3 import StepByStep
     results = {}
     model_state = deepcopy(model).state_dict()
     # optimizers: {'SGD': {'class': optim.SGD, 'parms': {'lr': 0.1}}, 'Adam': {...}}
@@ -387,3 +386,30 @@ def figure26(dummy_optimizer, dummy_schedulers):
     plt.savefig('test.png')
     return fig 
 
+def figure28(results, b, w, bs, ws, all_losses):
+    axs = []
+    fig = plt.figure(figsize=(15,12))
+    # plt.subplot2grid: (5 rows, 3 columns), (row 0th column ith), spanning 2 rows
+    for i in range(3):
+        axs.append(plt.subplot2grid((5,3), (0,i), rowspan=2))
+    for i in range(3):
+        axs.append(plt.subplot2grid((5,3), (3,i), rowspan=2))
+    for i in range(3):
+        axs.append(plt.subplot2grid((5,3), (2,i)))
+    lrs = [results[k]['lrs'] for k in ['SGD+Momentum', 'SGD+Momentum+Step', 'SGD+Momentum+Cycle']]
+    # Plot 3 middle plots
+    for ax, l, title in zip(axs[6:], lrs, ['No Scheduler', 'StepLR', 'CyclicLR']):
+        ax.plot(l)
+        ax.set_title(title)
+        if title=='CyclicLR':
+            ax.set_xlabel('Mini-batches')
+        else:
+            ax.set_xlabel('Epochs')
+        ax.set_ylabel('Learning Rate')
+        ax.set_ylim([0.0, 0.11])
+    # Plot 6 top and bottom plots
+    fig = plot_paths(results, b, w, bs, ws, all_losses, axs=axs[:6])
+    for ax in axs[:6]:
+        ax.set_xlabel('Bias')
+    fig.tight_layout()
+    plt.savefig('test.png')
