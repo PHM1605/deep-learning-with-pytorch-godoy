@@ -13,6 +13,20 @@ def compare_grayscale(converted, grayscale):
     plt.savefig('test.png')
     return fig
 
+def before_batchnorm(batch):
+    fig, axs = plt.subplots(1, 2, figsize=(12, 4))
+    for i in range(2):
+        feature = batch[0][:, i]
+        axs[i].hist(feature, bins=np.linspace(-3,3,15), alpha=0.5)
+        axs[i].set_xlabel(f'Feature #{i}')
+        axs[i].set_ylabel('# of points')
+        axs[i].set_title(f'mean={feature.mean():.4f} var={feature.var():.4f}')
+        axs[i].set_ylim([0, 13])
+        axs[i].label_outer()
+    fig.tight_layout()
+    plt.savefig('test.png')
+    return fig
+
 def figure1():
     # (size-in-millions-params,GFLOPS,wrong-percentage)
     data = {

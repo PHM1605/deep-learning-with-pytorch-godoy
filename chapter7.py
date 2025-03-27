@@ -174,19 +174,75 @@ sbs_incep.train(1)
 # Evaluate
 print("Evaluation recall of Inception net after 1 epoch: ", StepByStep.loader_apply(val_loader, sbs_incep.correct))
 
-# ## Each filter in 1x1 convolution is a weighted average of the input channels
-# # Example: using 1x1 convolution to convert RGB- to grayscale image
-# scissors = Image.open('rps/scissors/scissors01-001.png')
-# image = ToDtype(torch.float32, scale=True)(ToImage()(scissors))[:3,:,:].view(1,3,300,300)
-# weights = torch.tensor([0.2126, 0.7152, 0.0722]).view(1,3,1,1)
-# convolved = F.conv2d(input=image, weight=weights)
-# converted = ToPILImage()(convolved[0])
-# grayscale = scissors.convert('L')
-# fig = compare_grayscale(converted, grayscale)
+## Each filter in 1x1 convolution is a weighted average of the input channels
+# Example: using 1x1 convolution to convert RGB- to grayscale image
+scissors = Image.open('rps/scissors/scissors01-001.png')
+image = ToDtype(torch.float32, scale=True)(ToImage()(scissors))[:3,:,:].view(1,3,300,300)
+weights = torch.tensor([0.2126, 0.7152, 0.0722]).view(1,3,1,1)
+convolved = F.conv2d(input=image, weight=weights)
+converted = ToPILImage()(convolved[0])
+grayscale = scissors.convert('L')
+fig = compare_grayscale(converted, grayscale)
 
 ## Inception module: StandardType (only one 1x1 Conv) and DimensionReductionType (each ConvolutionBranch has one 1x1 Conv) 
 class Inception(nn.Module):
     def __init__(self, in_channels):
         super(Inception, self).__init__()
-        self.branch1x1_1 = nn.Conv2d(in_channels, 2, kernel_size=1)
+        # 1st branch 
+        self.branch1x1_1 = nn.Conv2d(in_channels, 2, kernel_size=1) # [2,H,W]
+        # 2nd branch
+        self.branch5x5_1 = nn.Conv2d(in_channels, 2, kernel_size=1) # [2,H,W]
+        self.branch5x5_2 = nn.Conv2d(2, 3, kernel_size=5, padding=2) # [3,H,W]
+        # 3rd branch
+        self.branch3x3_1 = nn.Conv2d(in_channels, 2, kernel_size=1) # [2,H,W]
+        self.branch3x3_2 = nn.Conv2d(2, 3, kernel_size=3, padding=1) # [3,H,W]
+        # 4th branch 
+        self.branch_pool_1 = nn.AvgPool2d(kernel_size=3, stride=1, padding=1) # [in_channels,H,W]
+        self.branch_pool_2 = nn.Conv2d(in_channels, 2, kernel_size=1) # [2,H,W]
         
+    def forward(self, x):
+        # 1st branch 
+        branch1x1 = self.branch1x1_1(x)
+        # 2nd branch
+        branch5x5 = self.branch5x5_1(x)
+        branch5x5 = self.branch5x5_2(branch5x5)
+        # 3rd branch
+        branch3x3 = self.branch3x3_1(x)
+        branch3x3 = self.branch3x3_2(branch3x3)
+        # 4th branch
+        branch_pool = self.branch_pool_1(x)
+        branch_pool = self.branch_pool_2(branch_pool)
+        # Output
+        outputs = torch.cat([branch1x1, branch5x5, branch3x3, branch_pool], 1) # [2+3+3+2,H,W]=[10,H,W]
+        return outputs 
+
+## Test pushing 3x300x300 image through Inception module
+inception = Inception(in_channels=3)
+output = inception(image)
+print("Output shape through Inception module: ", output.shape) # [1,10,300,300]
+
+class BasicConv2d(nn.Module):
+    def __init__(self, in_channels, out_channels, **kwargs):
+        super(BasicConv2d, self).__init__()
+        self.conv = nn.Conv2d(in_channels, out_channels, bias=False, **kwargs)
+        self.bn = nn.BatchNorm2d(out_channels, eps=0.001)
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.bn(x)
+        return F.relu(x, inplace=True)
+
+## Batch Normalization = Normalization + AffineTransformation to mitigate Internal Covariate Shift (ICS)
+# Notice: we shouldn't use 'bias' for the layer before BatchNorm, as it will be cancelled out regardless
+torch.manual_seed(23)
+# randn: random but standard normalized; rand: random but uniform on range [0,1)
+dummy_points = torch.randn((200,2)) + torch.rand((200,2))*2 
+dummy_labels = torch.randint(2, (200,1))
+dummy_dataset = TensorDataset(dummy_points, dummy_labels)
+dummy_loader = DataLoader(dummy_dataset, batch_size=64, shuffle=True)
+iterator = iter(dummy_loader)
+batch1 = next(iterator)
+batch2 = next(iterator)
+batch3 = next(iterator)
+mean1, var1 = batch1[0].mean(axis=0), batch1[0].var(axis=0)
+print("Mean and var of the 1st dummy batch: ", mean1, var1)
+fig = before_batchnorm(batch1)
