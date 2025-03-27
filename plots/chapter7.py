@@ -1,6 +1,18 @@
 import matplotlib.pyplot as plt 
 import numpy as np
 
+def compare_grayscale(converted, grayscale):
+    fig, axs = plt.subplots(1, 2, figsize=(8,4))
+    for img, ax, title in zip([converted, grayscale], axs, ['Converted, Grayscale']):
+        ax.imshow(img, cmap=plt.cm.gray)
+        ax.grid(False)
+        ax.set_title(title)
+        ax.set_xticks([])
+        ax.set_yticks([])
+    fig.tight_layout()
+    plt.savefig('test.png')
+    return fig
+
 def figure1():
     # (size-in-millions-params,GFLOPS,wrong-percentage)
     data = {

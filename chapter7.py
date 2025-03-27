@@ -129,3 +129,64 @@ print("Transferred-learning AlexNet model: ", sbs_alex.model.classifier)
 
 ## Test this new model on the whole Validation Dataset
 print("Transferred-learning AlexNet model validation result: ", StepByStep.loader_apply(val_loader, sbs_alex.correct)) # recall: 96.51%
+
+## Auxiliari classifier
+from torchvision.models.inception import Inception_V3_Weights
+
+model = inception_v3(weights=Inception_V3_Weights.DEFAULT)
+freeze_model(model)
+torch.manual_seed(42)
+model.AuxLogits.fc = nn.Linear(768, 3)
+model.fc = nn.Linear(2048, 3)
+
+# Note: we cannot use the pre-extracted feature approach 
+def inception_loss(outputs, labels):
+    try: 
+        main, aux = outputs
+    except ValueError:
+        main = outputs 
+        aux = None 
+        loss_aux = 0
+    multi_loss_fn = nn.CrossEntropyLoss(reduction='mean')    
+    loss_main = multi_loss_fn(main, labels)
+    if aux is not None:
+        loss_aux = multi_loss_fn(aux, labels)
+    return loss_main + 0.4 * loss_aux 
+
+optimizer_model = optim.Adam(model.parameters(), lr=3e-4)
+sbs_incep = StepByStep(model, inception_loss, optimizer_model)
+normalizer = Normalize(
+    mean=[0.485, 0.456, 0.406],
+    std=[0.229, 0.224, 0.225]
+    )
+composer = Compose([
+    Resize(299),
+    ToImage(),
+    ToDtype(torch.float32, scale=True),
+    normalizer
+])
+train_data = ImageFolder(root='rps', transform=composer)
+val_data = ImageFolder(root='rps-test-set', transform=composer)
+train_loader = DataLoader(train_data, batch_size=16, shuffle=True)
+val_loader = DataLoader(val_data, batch_size=16)
+sbs_incep.set_loaders(train_loader, val_loader)
+sbs_incep.train(1)
+# Evaluate
+print("Evaluation recall of Inception net after 1 epoch: ", StepByStep.loader_apply(val_loader, sbs_incep.correct))
+
+# ## Each filter in 1x1 convolution is a weighted average of the input channels
+# # Example: using 1x1 convolution to convert RGB- to grayscale image
+# scissors = Image.open('rps/scissors/scissors01-001.png')
+# image = ToDtype(torch.float32, scale=True)(ToImage()(scissors))[:3,:,:].view(1,3,300,300)
+# weights = torch.tensor([0.2126, 0.7152, 0.0722]).view(1,3,1,1)
+# convolved = F.conv2d(input=image, weight=weights)
+# converted = ToPILImage()(convolved[0])
+# grayscale = scissors.convert('L')
+# fig = compare_grayscale(converted, grayscale)
+
+## Inception module: StandardType (only one 1x1 Conv) and DimensionReductionType (each ConvolutionBranch has one 1x1 Conv) 
+class Inception(nn.Module):
+    def __init__(self, in_channels):
+        super(Inception, self).__init__()
+        self.branch1x1_1 = nn.Conv2d(in_channels, 2, kernel_size=1)
+        
