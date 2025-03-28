@@ -78,3 +78,15 @@ def figure1():
     ax.set_title('Comparing Architectures')
     plt.savefig('test.png')
     return fig 
+
+def compare_skip(image, noskip_image, skip_image):
+    fig, axs = plt.subplots(1, 3, figsize=(12,4))
+    for img, ax, title in zip([image, noskip_image, skip_image], axs, ['Original', 'No Skip','Skip']):
+        ax.imshow(img, cmap=plt.cm.gray)
+        ax.grid(False)
+        ax.set_title(title)
+        ax.set_xticks([])
+        ax.set_yticks([])
+    fig.tight_layout()
+    plt.savefig('test.png')
+    return fig 

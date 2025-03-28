@@ -33,9 +33,9 @@ from data_generation.rps import download_rps
 # )
 # alex.load_state_dict(state_dict)
 
-# def freeze_model(model):
-#     for parameter in model.parameters():
-#         parameter.requires_grad = False 
+def freeze_model(model):
+    for parameter in model.parameters():
+        parameter.requires_grad = False 
 # freeze_model(alex)
 # print("Alex classifier part: ", alex.classifier)
 # # Replace last part of the classifier to have only 3 classes (rock/paper/scissor)
@@ -82,22 +82,22 @@ from data_generation.rps import download_rps
 # alex.classifier[6] = nn.Identity()
 # print("New classifier of AlexNet: ", alex.classifier)
 # # Step 2: run the whole dataset through it and collect its output as a "dataset of features"
-# def preprocessed_dataset(model, loader, device=None):
-#     if device is None:
-#         device = next(model.parameters()).device 
-#     features = None 
-#     labels = None 
-#     for i, (x,y) in enumerate(loader):
-#         model.eval()
-#         output = model(x.to(device))
-#         if i==0:
-#             features = output.detach().cpu()
-#             labels = y.cpu()
-#         else:
-#             features = torch.cat([features, output.detach().cpu()])
-#             labels = torch.cat([labels, y.cpu()])
-#     dataset = TensorDataset(features, labels)
-#     return dataset 
+def preprocessed_dataset(model, loader, device=None):
+    if device is None:
+        device = next(model.parameters()).device 
+    features = None 
+    labels = None 
+    for i, (x,y) in enumerate(loader):
+        model.eval()
+        output = model(x.to(device))
+        if i==0:
+            features = output.detach().cpu()
+            labels = y.cpu()
+        else:
+            features = torch.cat([features, output.detach().cpu()])
+            labels = torch.cat([labels, y.cpu()])
+    dataset = TensorDataset(features, labels)
+    return dataset 
 # train_preproc = preprocessed_dataset(alex, train_loader)
 # val_preproc = preprocessed_dataset(alex, val_loader)
 # torch.save(train_preproc.tensors, 'rps_preproc.pth')
@@ -171,7 +171,7 @@ from data_generation.rps import download_rps
 # val_loader = DataLoader(val_data, batch_size=16)
 # sbs_incep.set_loaders(train_loader, val_loader)
 # sbs_incep.train(1)
-# # Evaluate
+# # Evaluate. Note: when calling sbs_incep(data) => only the main branch is passed by; the auxiliary branch is not
 # print("Evaluation recall of Inception net after 1 epoch: ", StepByStep.loader_apply(val_loader, sbs_incep.correct))
 
 # ## Each filter in 1x1 convolution is a weighted average of the input channels
@@ -343,30 +343,81 @@ from data_generation.rps import download_rps
 # print("Trial predictions for Residual model: ", np.concatenate([dummy_points[:5].numpy(), dummy_sbs.predict(dummy_points)[:5]], axis=1))
 # print("Residual model state dict: ", dummy_model.state_dict())
 
-class ResidualBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, stride=1, skip=True):
-        super(ResidualBlock, self).__init__()
-        self.skip = skip 
-        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, stride=stride, bias=False)
-        self.bn1 = nn.BatchNorm2d(out_channels)
-        self.relu = nn.ReLU(inplace=True)
-        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(out_channels)
-        self.downsample = None # to ensure the shortcut-branch and the forward-branch have the same number of channels (hence same shape), so be addable
-        if out_channels != in_channels:
-            self.downsample = nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride)
+# class ResidualBlock(nn.Module):
+#     def __init__(self, in_channels, out_channels, stride=1, skip=True):
+#         super(ResidualBlock, self).__init__()
+#         self.skip = skip 
+#         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, stride=stride, bias=False)
+#         self.bn1 = nn.BatchNorm2d(out_channels)
+#         self.relu = nn.ReLU(inplace=True)
+#         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False)
+#         self.bn2 = nn.BatchNorm2d(out_channels)
+#         self.downsample = None # to ensure the shortcut-branch and the forward-branch have the same number of channels (hence same shape), so be addable
+#         if out_channels != in_channels:
+#             self.downsample = nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride)
     
-    def forward(self, x):
-        identity = x
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-        out = self.conv2(out)
-        out = self.bn2(out)
-        if self.skip:
-            if self.downsample is not None:
-                identity = self.downsample(identity)
-            out += identity
-        out = self.relu(out)
-        return out 
-        
+#     def forward(self, x):
+#         identity = x
+#         out = self.conv1(x)
+#         out = self.bn1(out)
+#         out = self.relu(out)
+#         out = self.conv2(out)
+#         out = self.bn2(out)
+#         if self.skip:
+#             if self.downsample is not None:
+#                 identity = self.downsample(identity)
+#             out += identity
+#         out = self.relu(out)
+#         return out 
+
+# scissors = Image.open('rps/scissors/scissors01-001.png')
+# image = ToDtype(torch.float32, scale=True)(ToImage()(scissors))[:3,:,:].view(1,3,300,300)
+# seed = 14
+# torch.manual_seed(seed)
+# skip_image = ResidualBlock(3,3)(image)
+# skip_image = ToPILImage()(skip_image[0])
+# torch.manual_seed(seed)
+# noskip_image = ResidualBlock(3,3, skip=False)(image)
+# noskip_image = ToPILImage()(noskip_image[0])
+# fig = compare_skip(scissors, noskip_image, skip_image)
+
+## Putting all together
+normalizer = Normalize(mean=[0.485,0.456,0.406], std=[0.229,0.224,0.225])
+composer = Compose([Resize(256), CenterCrop(224), ToImage(), ToDtype(torch.float32, scale=True), normalizer])
+train_data = ImageFolder(root='rps', transform=composer)
+val_data = ImageFolder(root='rps-test-set', transform=composer)
+train_loader = DataLoader(train_data, batch_size=16, shuffle=True)
+val_loader = DataLoader(val_data, batch_size=16)
+
+# from torchvision.models.resnet import ResNet18_Weights
+# model = resnet18(weights=ResNet18_Weights.DEFAULT)
+# torch.manual_seed(42)
+# model.fc = nn.Linear(512, 3)
+# # we'll use FineTuning i.e. no freezing implemented
+# multi_loss_fn = nn.CrossEntropyLoss(reduction='mean')
+# optimizer_model = optim.Adam(model.parameters(), lr=3e-4)
+# sbs_transfer = StepByStep(model, multi_loss_fn, optimizer_model)
+# sbs_transfer.set_loaders(train_loader, val_loader)
+# sbs_transfer.train(1)
+# print("Validation recall of FineTuning: ", StepByStep.loader_apply(val_loader, sbs_transfer.correct))
+# # we'll use TransferLearning
+from torchvision.models.resnet import ResNet18_Weights
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+model = resnet18(weights=ResNet18_Weights.DEFAULT).to(device)
+model.fc = nn.Identity()
+freeze_model(model)
+train_preproc = preprocessed_dataset(model, train_loader)
+val_preproc = preprocessed_dataset(model, val_loader)
+train_preproc_loader = DataLoader(train_preproc, batch_size=16, shuffle=True)
+val_preproc_loader = DataLoader(val_preproc, batch_size=16)
+torch.manual_seed(42)
+top_model = nn.Sequential(nn.Linear(512,3))
+multi_loss_fn = nn.CrossEntropyLoss(reduction='mean')
+optimizer_top = optim.Adam(top_model.parameters(), lr=3e-4)
+sbs_top = StepByStep(top_model, multi_loss_fn, optimizer_top)
+sbs_top.set_loaders(train_preproc_loader, val_preproc_loader)
+sbs_top.train(10)
+print("Validation recall of TransferLearning (using pre-extracted features): ", StepByStep.loader_apply(val_preproc_loader, sbs_top.correct))
+model.fc = top_model
+sbs_temp = StepByStep(model, None, None)
+print("Validation recall of TransferLearning (using original images features): ", StepByStep.loader_apply(val_loader, sbs_temp.correct))
