@@ -27,6 +27,23 @@ def before_batchnorm(batch):
     plt.savefig('test.png')
     return fig
 
+def after_batchnorm(batch, normalized): 
+    fig, axs = plt.subplots(1, 2, figsize=(12,4))
+    for i in range(2):
+        feature = batch[0][:,i]
+        normed = normalized[:,i]
+        axs[i].hist(feature, bins=np.linspace(-3,3,15), alpha=0.5, label='Original')
+        axs[i].hist(normed, bins=np.linspace(-3,3,15), alpha=0.5, label='Standardized')
+        axs[i].set_xlabel(f'Feature #{i}')
+        axs[i].set_ylabel('# of points')
+        axs[i].set_title(f'mean={normed.mean():.4f} std={normed.std(unbiased=False):.4f}')
+        axs[i].legend()
+        axs[i].set_ylim([0, 13])
+        axs[i].label_outer()
+    fig.tight_layout()
+    plt.savefig('test.png')
+    return fig 
+
 def figure1():
     # (size-in-millions-params,GFLOPS,wrong-percentage)
     data = {
