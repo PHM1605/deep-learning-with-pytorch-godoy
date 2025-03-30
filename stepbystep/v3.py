@@ -41,6 +41,7 @@ class StepByStep(object):
         self.scheduler = None
         self.is_batch_lr_scheduler = False # changing learning-rate after each batch or each epoch
         self.learning_rates = []
+        self.clipping = None 
 
     def to(self, device):
         try:
@@ -66,6 +67,11 @@ class StepByStep(object):
             loss = self.loss_fn(yhat, y)
             # Compute grad for parameters
             loss.backward()
+
+            # Grad clipping if needed
+            if callable(self.clipping):
+                self.clipping()
+
             # Update parameters
             self.optimizer.step()
             self.optimizer.zero_grad()
@@ -482,8 +488,30 @@ class StepByStep(object):
                 lambda d: d['lr'], self.scheduler.optimizer.state_dict()['param_groups']
             ))
             self.learning_rates.append(current_lr)
+    
+    ## Clipping 
+    def set_clip_grad_value(self, clip_value):
+        self.clipping = lambda: nn.utils.clip_grad_value_(self.model.parameters(), clip_value)
+    
+    def set_clip_grad_norm(self, max_norm, norm_type=2):
+        self.clipping = lambda: nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=max_norm, norm_type=norm_type)
+    
+    # for "clipping during backpropagation", clipping all grads all the time, not only between grads-compute & parameters-update
+    def set_clip_backprop(self, clip_value):
+        if self.clipping is None:
+            self.clipping = []
+        for p in self.model.parameters():
+            if p.requires_grad:
+                func = lambda grad: torch.clamp(grad, -clip_value, clip_value)
+                handle = p.register_hook(func)
+                self.clipping.append(handle)
 
-
+    def remove_clip(self):
+        if isinstance(self.clipping, list):
+            for handle in self.clipping:
+                handle.remove()
+        self.clipping = None 
+    
 def make_lr_fn(start_lr, end_lr, num_iter, step_mode='exp'):
     # iteration (list): [0,1,2,...10]
     if step_mode == 'linear':
