@@ -1,6 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+def add_arrow(line, position=None, direction='right', size=15, color=None, lw=2, alpha=1.0, text=None, text_offset=(0, 0)):
+    if color is None:
+        color = line.get_color()
+    xdata = line.get_xdata()
+    ydata = line.get_ydata()
+
 # draw_arrows: we want to draw two figures (clock- and counterclockwise) or not 
 def counter_vs_clock(basic_corners=None, basic_colors=None, basic_letters=None, draw_arrows=True, binary=True):
     if basic_corners is None: 
@@ -28,9 +34,71 @@ def counter_vs_clock(basic_corners=None, basic_colors=None, basic_letters=None, 
         axs = [axs]
 
     corners = basic_corners[:] # why??
-    print(corners.max(axis=0))
+    factor = (corners.max(axis=0) - corners.min(axis=0)).max()/2 # ([1,1]-[-1,-1]).max()/2=1
+    # in one-image mode: draw counter-clockwise in axis0
+    # in two-image mode: draw counter-clockwise in axis0, clockwise in axis1
+    for is_clock in range(1+draw_arrows):
+        if draw_arrows:
+            if binary:
+                if is_clock:
+                    axs[is_clock].text(-0.5, 0, 'Clockwise')
+                    axs[is_clock].text(-0.2, -0.25, 'y=1')
+                else:
+                    axs[is_clock].text(-0.5, 0, 'Counter-\nClockwise')
+                    axs[is_clock].text(-0.2, -0.25, 'y=0')
 
-    print("CRONERSL:", corners)
+        for i in range(4):
+            coords = corners[i]
+            color = basic_colors[i]
+            letter = basic_letters[i]
+
+            if not binary:
+                targets = [2,3] if is_clock else [1,2]
+            else:
+                targets = [] 
+            
+            alpha=0.3 if i in targets else 1.0
+            axs[is_clock].scatter(*coords, c=color, s=400, alpha=alpha)
+
+            start = i 
+            if is_clock:
+                end = i+1 if i<3 else 0
+                # for start = lower-left, end = top-left
+                arrow_coords = np.stack([
+                    corners[start] - clock_arrows[start]*0.15, # tail of ^ from lower-left
+                    corners[end] + clock_arrows[start]*0.15]) # head of ^ point to top-left
+            else: # counter-clockwise
+                end = i-1 if i>0 else -1
+                # e.g. for start = lower-left, end = bottom-right
+                arrow_coords = np.stack([
+                    corners[start] + clock_arrows[end]*0.15, # tail of > point from lower-left
+                    corners[end] - clock_arrows[end]*0.15 # head of > point to lower-right  
+                ])
+            if draw_arrows:
+                alpha = 0.3 if ((start in targets) or (end in targets)) else 1.0
+            # draw line only when we don't draw arrows (in one-image mode)
+            # line is '--' only in one-image-mode and alpha is 0.3 (blurred)
+            line = axs[is_clock].plot(
+                *arrow_coords.T, 
+                c=color, 
+                lw=0 if draw_arrows else 2, 
+                alpha=alpha, 
+                linestyle='--' if (alpha<1) and (not draw_arrows) else '-')[0]
+
+            if draw_arrows:
+                add_arrow(line, lw=3, alpha=alpha)
+
+            # points in 'targets" => black char, else white
+            axs[is_clock].text(*(coords-factor*np.array([0.05,0.05])), letter, c='k' if i in targets else 'w')
+            axs[is_clock].grid(False)
+
+        limits = np.stack([corners.min(axis=0), corners.max(axis=0)]) # [[xmin,ymin],[xmax,ymax]]
+        limits = limits.mean(axis=0).reshape(2,1) + 1.2*np.array([[-factor, factor]]) # 1.2*midpoint
+        axs[is_clock].set_xlim(limits[0])
+        axs[is_clock].set_ylim(limits[1])
+        axs[is_clock].set_xlabel(r'$x_0$')
+        axs[is_clock].set_ylabel(r'$x_1$', rotation=0)
+
     fig.tight_layout()
     plt.savefig('test.png')
     return fig 
