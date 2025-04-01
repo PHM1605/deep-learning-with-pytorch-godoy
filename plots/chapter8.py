@@ -1,11 +1,30 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def add_arrow(line, position=None, direction='right', size=15, color=None, lw=2, alpha=1.0, text=None, text_offset=(0, 0)):
+def add_arrow(line, direction='right', size=15, color=None, lw=2, alpha=1.0, text=None, text_offset=(0, 0)):
     if color is None:
         color = line.get_color()
     xdata = line.get_xdata()
     ydata = line.get_ydata()
+    
+    if direction=='right':
+        start_ind, end_ind = 0, 1
+    else:
+        start_ind, end_ind = 1, 0
+    
+    line.axes.annotate('', 
+        xytext=(xdata[start_ind], ydata[start_ind]),
+        xy=(xdata[end_ind], ydata[end_ind]),
+        arrowprops=dict(arrowstyle="->", color=color, lw=lw, linestyle='--' if alpha<1 else '-', alpha=alpha),
+        size=size
+        )
+    if text is not None:
+        line.axes.annotate(text,
+            xytext=(xdata[end_ind]+text_offset[0], ydata[end_ind]+text_offset[1]),
+            xy=(xdata[end_ind], ydata[end_ind]),
+            size=size
+            )
+
 
 # draw_arrows: we want to draw two figures (clock- and counterclockwise) or not 
 def counter_vs_clock(basic_corners=None, basic_colors=None, basic_letters=None, draw_arrows=True, binary=True):
@@ -99,6 +118,64 @@ def counter_vs_clock(basic_corners=None, basic_colors=None, basic_letters=None, 
         axs[is_clock].set_xlabel(r'$x_0$')
         axs[is_clock].set_ylabel(r'$x_1$', rotation=0)
 
+    fig.tight_layout()
+    plt.savefig('test.png')
+    return fig 
+
+def plot_sequences(basic_corners=None, basic_colors=None, basic_letters=None, binary=True, target_len=0):
+    if basic_corners is None:
+        basic_corners = np.array([[-1,-1],[-1,1],[1,1],[1,-1]])
+    if basic_colors is None:
+        basic_colors = ['gray', 'g', 'b', 'r']
+    if basic_letters is None:
+        basic_letters = ['A','B','C','D']
+    fig, axs = plt.subplots(4, 2, figsize=(6,3))
+    # cols: class 0 or class 1
+    for d in range(2):
+        # rows: sequences to give class 0 (or class 1)
+        for b in range(4):
+            corners = basic_corners[[(b+i)%4 for i in range(4)]][slice(None,None,2*d-1)]
+            # before 'slice': ['gray','g','b','r']/['g','b','r','gray']/['b','r','gray','g']/['r','gray','g','b']
+            colors = np.array(basic_colors)[[(b+i)%4 for i in range(4)]][slice(None,None,2*d-1)]
+            # before 'slice': ['A','B','C','D']/['B','C','D','A']/['C','D','A','B']/['D','A','B','C']
+            # [slice(,,-1)] means counter-direction (A-B-C-D); [slice(,,+1)] mean clockwise-direction (D-C-B-A)
+            letters = np.array(basic_letters)[[(b+i)%4 for i in range(4)]][slice(None,None,2*d-1)]
+            for i in range(4):
+                axs[b, d].scatter(i, 0, c=colors[i], s=600, alpha=0.3 if (i+target_len)>=4 else 1.0)
+                axs[b, d].text(i-0.125, -0.2, letters[i], c='k' if (i+target_len)>=4 else 'w', fontsize=14)
+            axs[b, d].grid(False)
+            axs[b, d].set_xticks([])
+            axs[b, d].set_yticks([])
+            axs[b, d].set_xlim([-0.5, 4])
+            axs[b, d].set_ylim([-1, 1])
+            if binary:
+                axs[b, d].text(4, -0.1, f'y={d}')
+            
+    fig.tight_layout()
+    plt.savefig('test.png')
+    return fig 
+
+def plot_data(points, directions, n_rows=2, n_cols=5):
+    fig, axs = plt.subplots(n_rows, n_cols, figsize=(3*n_cols, 3*n_rows))
+    axs = axs.flatten()
+    for e, ax in enumerate(axs):
+        pred_corners = points[e]
+        clockwise = directions[e]
+        color='k'
+        ax.scatter(*pred_corners.T, c=color, s=400)
+        for i in range(4): # bug here if generate_sequences(..., variable_len=True)
+            if i==3:
+                start = -1 # so that pred_corners[start+1] turns to pred_corners[0]
+            else:
+                start = i
+            ax.plot(*pred_corners[[start, start+1]].T, c='k', lw=2, alpha=0.5, linestyle='-')
+            ax.text(*(pred_corners[i]-np.array([0.04, 0.04])), str(i+1), c='w', fontsize=12)
+            if directions is not None:
+                ax.set_title(f'{"Counter-" if not clockwise else ""}Clockwise (y={clockwise})', fontsize=14)
+        ax.set_xlabel(r"$x_0$")
+        ax.set_ylabel(r"$x_1$")
+        ax.set_xlim([-1.5, 1.5])
+        ax.set_ylim([-1.5, 1.5])
     fig.tight_layout()
     plt.savefig('test.png')
     return fig 

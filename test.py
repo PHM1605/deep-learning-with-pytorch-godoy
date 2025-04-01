@@ -1,4 +1,6 @@
+import numpy as np
 
-import torch.nn as nn
-b = lambda m: m*m 
-print(b)
+basic_colors = ['gray', 'g', 'b', 'r']
+for b in range(4):
+    tmp = np.array(basic_colors)[[(b+i)%4 for i in range(4)]][slice(None, None, 0*2-1)][:1]
+    print(tmp)

@@ -263,13 +263,10 @@ def add_arrow(line, direction='right', size=15, color=None, lw=2, alpha=1.0, tex
         color = line.get_color()
     xdata = line.get_xdata() # [0,2.5]
     ydata = line.get_ydata() # [0,0.8]
-    # find which point is on the left
-    left_ind = np.argmin(xdata)
-    right_ind = np.argmax(xdata)
-    if direction == 'right':
-        start_ind, end_ind = left_ind, right_ind 
+    if direction=='right':
+        start_ind, end_ind = 0, 1
     else:
-        start_ind, end_ind = right_ind, left_ind 
+        start_ind, end_ind = 1, 0
     line.axes.annotate(
         '',
         xytext=(xdata[start_ind], ydata[start_ind]), # not important
