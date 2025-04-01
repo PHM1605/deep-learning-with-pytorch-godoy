@@ -179,3 +179,36 @@ def plot_data(points, directions, n_rows=2, n_cols=5):
     fig.tight_layout()
     plt.savefig('test.png')
     return fig 
+
+def build_rnn_cell(linear_hidden, activation='tanh'):
+    if activation == 'tanh':
+        activation = nn.Tanh()
+    elif activation == 'relu':
+        activation = nn.ReLU()
+    else:
+        activation = nn.Sigmoid()
+    model = nn.Sequential()
+    model.add_module('th', linear_hidden)
+    model.add_module('addtx', nn.Linear(2,2))
+    model.add_module('activation', activation)
+    with torch.no_grad():
+        model.addtx.weight = nn.Parameter(torch.eye(2))
+        model.addtx.bias = nn.Parameters(torch.zeros(2))
+    return model 
+
+def add_tx(model, tdata):
+    with torch.no_grad():
+        model.addtx.bias = nn.Parameter(tdata)
+    return model 
+
+# linear_hidden and linear_input are Layers
+def generate_rnn_states(linear_hidden, linear_input, X):
+    hidden_states = []
+    model_states = [] 
+    hidden = torch.zeros(1, 1, 2)
+    tdata = linear_input(X)
+    rcell = build_rnn_cell(linear_hidden)
+
+# 'linear_hidden' and 'linear_input' are Layers
+def figure8(linear_hidden, linear_input, X):
+    pass
