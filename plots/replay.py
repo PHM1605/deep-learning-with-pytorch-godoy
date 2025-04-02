@@ -1,6 +1,8 @@
-import matplotlib.plt as plt
+import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from operator import itemgetter 
+import torch.nn as nn
+import numpy as np
 
 # Basic plot class, NOT to be initiated directly
 class Basic(object):
@@ -97,6 +99,7 @@ class FeatureSpace(Basic):
 # layer_name: 'input'
 def build_feature_space(model, states, X, y, layer_name=None, 
     contour_points=1000, xlim=(-1,1), ylim=(-1,1), display_grid=True, epoch_start=0, epoch_end=-1):
+    # layers: [('', Sequential), ('input', Linear), ('activation', Sigmoid)]
     layers = list(model.named_modules())
     last_layer_name, last_layer_class = layers[-1]
     is_logit = not isinstance(last_layer_class, nn.Sigmoid)
@@ -109,3 +112,48 @@ def build_feature_space(model, states, X, y, layer_name=None,
     # take item 0 of each element of layers
     names = np.array(list(map(itemgetter(0), layers)))
     matches = names == layer_name
+    if np.any(matches):
+        activation_idx = np.argmax(matches)
+    else:
+        raise AttributeError("No layer named {}".format(layer_name))
+    if layer_name is None:
+        layer_name = layers[activation_idx][0]
+    
+    try:
+        final_dims = layers[activation_idx][1].out_features
+    except:
+        try:
+            final_dims = layers[activation_idx+1][1].in_features 
+        except:
+            final_dims = layers[activation_idx-1][1].out_features 
+    assert final_dims == 2, 'Only layers with 2-dimensinal outputs are supported!'
+    
+    y_ind = np.atleast_1d(y.squeeze().argsort()) # sort points in ascending order
+    X = np.atleast_2d(X.squeeze())[y_ind].reshape(X.shape) # X: [1,1,2]
+    y = np.atleast_1d(y.squeeze())[y_ind]
+
+    if epoch_end == -1:
+        epoch_end = len(states) - 1
+    epoch_end = min(epoch_end, len(states)-1) # 1
+    input_dims = X.shape[-1] # 2
+    n_classes = len(np.unique(y)) # 1
+
+    #Build grid & contour
+    grid_lines = np.array([])
+    contour_lines = np.array([])
+    if input_dims == 2 and display_grid:
+        grid_lines = build_2d_grid(xlim, ylim)
+        # contour_lines = build_2d_grid(xlim, ylim, contour_points, contour_points)
+
+    return
+
+# create a 2D grid of 'n_lines' of 'n_points' each
+def build_2d_grid(xlim, ylim, n_lines=11, n_points=1000):
+    xs = np.linspace(*xlim, num=n_lines)
+    ys = np.linspace(*ylim, num=n_points)
+    x0, y0 = np.meshgrid(xs, ys)
+    lines_x0 = np.atleast_3d(x0.transpose()) # [11,1000,1], rows [-1,-1...], [-0.8,-0.8...]
+    lines_y0 = np.atleast_3d(y0.transpose()) # [11,1000,1], cols [-1,-1...], [-0.998,-0.998...]
+    
+    
+    print("LINSE2: ", lines_y0[:,1,0])

@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
+from copy import deepcopy
+from .replay import *
 
 def add_arrow(line, direction='right', size=15, color=None, lw=2, alpha=1.0, text=None, text_offset=(0, 0)):
     if color is None:
@@ -213,7 +215,7 @@ def generate_rnn_states(linear_hidden, linear_input, X):
     rcell = build_rnn_cell(linear_hidden) # has 'linear_hidden', 'addtx'(including the transformed-input-state as its bias), 'activation' modules
     for i in range(len(X.squeeze())):
         hidden_states.append(hidden)
-        rcell = addtx(rcell, tdata[:,i,:])
+        rcell = add_tx(rcell, tdata[:,i,:])
         model_states.append(deepcopy(rcell.state_dict()))
         hidden = rcell(hidden)
     return rcell, model_states, hidden_states, {}
@@ -228,7 +230,7 @@ def feature_spaces(model, mstates, hstates, gates, titles=None, bounded=None, bo
     axs = np.atleast_2d(axs)
 
     identity_model = nn.Sequential()
-    identity_model.add_module('input', n.Linear(2,2))
+    identity_model.add_module('input', nn.Linear(2,2))
     with torch.no_grad():
         identity_model.input.weight = nn.Parameter(torch.eye(2))
         identity_model.input.bias = nn.Parameter(torch.zeros(2))
