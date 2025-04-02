@@ -1,5 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import torch
+import torch.nn as nn
 
 def add_arrow(line, direction='right', size=15, color=None, lw=2, alpha=1.0, text=None, text_offset=(0, 0)):
     if color is None:
@@ -193,7 +195,7 @@ def build_rnn_cell(linear_hidden, activation='tanh'):
     model.add_module('activation', activation)
     with torch.no_grad():
         model.addtx.weight = nn.Parameter(torch.eye(2))
-        model.addtx.bias = nn.Parameters(torch.zeros(2))
+        model.addtx.bias = nn.Parameter(torch.zeros(2))
     return model 
 
 def add_tx(model, tdata):
@@ -202,13 +204,56 @@ def add_tx(model, tdata):
     return model 
 
 # linear_hidden and linear_input are Layers
+# X: [1,4,2]
 def generate_rnn_states(linear_hidden, linear_input, X):
     hidden_states = []
     model_states = [] 
     hidden = torch.zeros(1, 1, 2)
-    tdata = linear_input(X)
-    rcell = build_rnn_cell(linear_hidden)
+    tdata = linear_input(X) # [1,4,2]
+    rcell = build_rnn_cell(linear_hidden) # has 'linear_hidden', 'addtx'(including the transformed-input-state as its bias), 'activation' modules
+    for i in range(len(X.squeeze())):
+        hidden_states.append(hidden)
+        rcell = addtx(rcell, tdata[:,i,:])
+        model_states.append(deepcopy(rcell.state_dict()))
+        hidden = rcell(hidden)
+    return rcell, model_states, hidden_states, {}
+
+def feature_spaces(model, mstates, hstates, gates, titles=None, bounded=None, bounds=(-7.2,7.2), n_points=4):
+    layers = [t[0] for t in list(model.named_modules())[1:]]
+    X = torch.tensor([[-1,-1], [-1,1], [1,1], [1,-1]]).float().view(1,4,2)
+    letters = ['A', 'B', 'C', 'D']
+    y = torch.tensor([[0],[1],[2],[3]]).float()
+    hidden = torch.zeros(1,1,2)
+    fig, axs = plt.subplots(n_points, len(layers)+1, figsize=(5*len(layers)+5, 5*n_points))
+    axs = np.atleast_2d(axs)
+
+    identity_model = nn.Sequential()
+    identity_model.add_module('input', n.Linear(2,2))
+    with torch.no_grad():
+        identity_model.input.weight = nn.Parameter(torch.eye(2))
+        identity_model.input.bias = nn.Parameter(torch.zeros(2))
+    if titles is None:
+        titles = ['hidden'] + layers 
+    if bounded is None:
+        bounded = [] 
+    
+    for i in range(n_points):
+        data = build_feature_space(
+            identity_model, 
+            [identity_model.state_dict()], 
+            hidden.detach(), 
+            np.array([i]), 
+            layer_name='input')
 
 # 'linear_hidden' and 'linear_input' are Layers
+# X: [4,2]
 def figure8(linear_hidden, linear_input, X):
-    pass
+    # cell state, model state, hidden state
+    rcell, mstates, hstates, _ = generate_rnn_states(linear_hidden, linear_input, X.unsqueeze(0))
+    titles = [ 
+        r'$hidden\ state\ {h}',
+        r'$transformed\ state\ )t_h$',
+        r'$adding\ t_x (t_h+t_x)$',
+        r'$activated\ state$' + '\n' + r'$h=tanh(t_h+t_x)$'
+    ]
+    return feature_spaces(rcell, mstates, hstates, {}, titles, bounds=(-1.5, 1.5), n_points=1)
