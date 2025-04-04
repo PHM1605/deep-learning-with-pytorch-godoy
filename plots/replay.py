@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from operator import itemgetter 
+import torch
 import torch.nn as nn
 import numpy as np
 
@@ -85,7 +86,7 @@ class FeatureSpace(Basic):
         self.n_inputs = self.bent_inputs.shape[-1]
         self.classes = np.unique(self.targets)
         # many lists, each list is one target
-        self.bent_inputs = [self.bent_inputs[:,self.targets==target, :] for target in self.clasess]
+        self.bent_inputs = [self.bent_inputs[:,self.targets==target, :] for target in self.classes]
         self._prepare_plot()
 
     def _prepare_plot(self):
@@ -132,6 +133,7 @@ def build_feature_space(model, states, X, y, layer_name=None,
     X = np.atleast_2d(X.squeeze())[y_ind].reshape(X.shape) # X: [1,1,2]
     y = np.atleast_1d(y.squeeze())[y_ind]
 
+    print("STATES: ", len(states))
     if epoch_end == -1:
         epoch_end = len(states) - 1
     epoch_end = min(epoch_end, len(states)-1) # 1
@@ -142,8 +144,15 @@ def build_feature_space(model, states, X, y, layer_name=None,
     grid_lines = np.array([])
     contour_lines = np.array([])
     if input_dims == 2 and display_grid:
-        grid_lines = build_2d_grid(xlim, ylim)
-        # contour_lines = build_2d_grid(xlim, ylim, contour_points, contour_points)
+        grid_lines = build_2d_grid(xlim, ylim) #[22,1000,2]
+        contour_lines = build_2d_grid(xlim, ylim, contour_points, contour_points) # [1000,1000,2]
+    
+    bent_lines = []
+    bent_inputs = []
+    bent_contour_lines = []
+    bent_preds = []
+    for epoch in range(epoch_start, epoch_end+1):
+        X_values = get_values_for_epoch(model, states, epoch, grid_lines.reshape(-1,2))
 
     return
 
@@ -153,7 +162,44 @@ def build_2d_grid(xlim, ylim, n_lines=11, n_points=1000):
     ys = np.linspace(*ylim, num=n_points)
     x0, y0 = np.meshgrid(xs, ys)
     lines_x0 = np.atleast_3d(x0.transpose()) # [11,1000,1], rows [-1,-1...], [-0.8,-0.8...]
-    lines_y0 = np.atleast_3d(y0.transpose()) # [11,1000,1], cols [-1,-1...], [-0.998,-0.998...]
+    lines_y0 = np.atleast_3d(y0.transpose()) # [11,1000,1], rows [-1,-0.998...], [-1,-0.998...]
     
+    xs = np.linspace(*xlim, num=n_points) # [-1,-0.998..,0.998,1]
+    ys = np.linspace(*ylim, num=n_lines) # [-1.-0.8...,0.8,1]
+    x1, y1 = np.meshgrid(xs, ys)
+    lines_x1 = np.atleast_3d(x1) # [11,1000,1], rows (the same) [-1,-0.99,...,1]
+    lines_y1 = np.atleast_3d(y1) # [11,1000,1], rows [-1,...,-1], [-0.8,...,-0.8]
     
-    print("LINSE2: ", lines_y0[:,1,0])
+    vertical_lines = np.concatenate([lines_x0, lines_y0], axis=2) # [11,1000,2]
+    horizontal_lines = np.concatenate([lines_x1, lines_y1], axis=2) # [11,1000,2]
+    if n_lines != n_points:
+        lines = np.concatenate([vertical_lines, horizontal_lines], axis=0) # [22,1000,2]
+    else:
+        lines = vertical_lines
+    return lines 
+
+def get_values_for_epoch(model, states, epoch, x):
+    with torch.no_grad():
+        model.load_state_dict(states[epoch])
+    return get_intermediate_values(model, x)
+
+def get_intermediate_values(model, x):
+    hooks = {}
+    visualization = {}
+    layer_names = {} # {Layer: 'layer1'}
+
+    def hook_fn(m, i, o):
+        visualization[layer_names[m]] = o.cpu().detach().numpy()
+    
+    for name, layer in model.named_modules():
+        if name != '':
+            layer_names[layer] = name 
+            hooks[name] = layer.register_forward_hook(hook_fn)
+    device = list(model.parameters())[0].device.type
+    model(torch.as_tensor(x).float().unsqueeze(0).to(device))
+
+    for hook in hooks.values():
+        hook.remove()
+    
+    return visualization
+
