@@ -290,6 +290,80 @@ def feature_spaces(model, mstates, hstates, gates, titles=None, bounded=None, bo
     plt.savefig('test.png')
     return fig 
 
+def disassemble_rnn(rnn_model, layer=''): # layer: '_l0', '_l1'
+    hidden_size = rnn_model.hidden_size 
+    input_size = rnn_model.input_size 
+    linear_hidden = nn.Linear(hidden_size, hidden_size)
+    linear_input = nn.Linear(input_size, hidden_size)
+    rnn_state = rnn_model.state_dict()
+    whh = rnn_state[f'weight_hh{layer}'].to('cpu')
+    bhh = rnn_state[f'bias_hh{layer}'].to('cpu')
+    wih = rnn_state[f'weight_ih{layer}'].to('cpu')
+    bih = rnn_state[f'bias_ih{layer}'].to('cpu')
+    with torch.no_grad():
+        linear_hidden.weight = nn.Parameter(whh)
+        linear_hidden.bias = nn.Parameter(bhh)
+        linear_input.weight = nn.Parameter(wih)
+        linear_input.bias = nn.Parameter(bih)
+    return linear_hidden, linear_input 
+
+# 'linear_hidden' and 'linear_input' are Linear layers
+# X: [1,4,2]
+def generate_rnn_states(linear_hidden, linear_input, X):
+    hidden_states, model_states = [], []
+    hidden = torch.zeros(1, 1, 2) # [num_stacked_layers, N, H]
+    tdata = linear_input(X) # [1,4,2]
+    rcell = build_rnn_cell(linear_hidden)
+    for i in range(len(X.squeeze())):
+        hidden_states.append(hidden)
+        rcell = add_tx(rcell, tdata[:,i,:])
+        model_states.append(deepcopy(rcell.state_dict()))
+        hidden = rcell(hidden)
+    return rcell, model_states, hidden_states, {}
+
+def transformed_inputs(linear_input, basic_corners=None, basic_letters=None, basic_colors=None, ax=None, title=None):
+    device = list(linear_input.parameters())[0].device.type
+    if basic_corners is None:
+        basic_corners = np.array([[-1,-1], [-1,1], [1,1], [1,-1]])
+    if basic_colors is None:
+        basic_colors = ['gray', 'g', 'b', 'r']
+    if basic_letters is None:
+        basic_letters = ['A', 'B', 'C', 'D']
+    corners = linear_input(torch.as_tensor(basic_corners).float().to(device)).detach().cpu().numpy().squeeze() # transformed corners [4,2]
+    transf_corners = [basic_corners[:], corners] # list of 4 corners before transformation and 4 corners after transformation
+    factor = (corners.max(axis=0) - corners.min(axis=0)).max() / 2
+    ret = False
+    if ax is None:
+        ret = True 
+        fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+    
+    # 4 corners before transformations; then 4 corners after transformations
+    for corners in transf_corners:
+        for i in range(4):
+            coords = corners[i]
+            color = basic_colors[i]
+            letter = basic_letters[i]
+            ax.scatter(*coords, c=color, s=400)
+            if i==3: 
+                start = -1
+            else:
+                start = i 
+            ax.plot(*corners[[start, start+1]].T, c='k', lw=1, alpha=0.5) # connecting line
+            ax.text(*(coords-factor*np.array([0.04, 0.04])), letter, c='w', fontsize=12)
+            limits = np.stack([corners.min(axis=0), corners.max(axis=0)]) # [[xmin, ymin], [xmax, ymax]]
+            limits = limits.mean(axis=0).reshape(2,1) + 1.2*np.array([[-factor, factor]])
+            ax.set_xlim(limits[0])
+            ax.set_ylim(limits[1])
+    if title is not None:
+        ax.set_title(title)
+    ax.set_xlabel(r"$x_0$")
+    ax.set_ylabel(r"$x_1$", rotation=0)
+
+    if ret:
+        fig.tight_layout()
+        plt.savefig('test.png')
+        return fig
+
 # 'linear_hidden' and 'linear_input' are Layers
 # X: [4,2]
 def figure8(linear_hidden, linear_input, X):
@@ -302,3 +376,10 @@ def figure8(linear_hidden, linear_input, X):
         r'$activated\ state$' + '\n' + r'$h=tanh(t_h+t_x)$'
     ]
     return feature_spaces(rcell, mstates, hstates, {}, titles, bounds=(-1.5, 1.5), n_points=1)
+
+# Check the transformation on input of the RNN 
+def figure13(rnn):
+    square = torch.tensor([[-1,-1], [-1,1], [1,1], [1,-1]]).float().view(1,4,2)
+    linear_hidden, linear_input = disassemble_rnn(rnn, layer='_l0')
+    rcell, mstates, hstates, _ = generate_rnn_states(linear_hidden, linear_input, square)
+    return transformed_inputs(linear_input, title='RNN')
