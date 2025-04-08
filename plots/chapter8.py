@@ -222,11 +222,12 @@ def generate_rnn_states(linear_hidden, linear_input, X):
 
 def feature_spaces(model, mstates, hstates, gates, titles=None, bounded=None, bounds=(-7.2,7.2), n_points=4):
     layers = [t[0] for t in list(model.named_modules())[1:]]
+    # layers: ['th', 'addtx', 'activation']
     X = torch.tensor([[-1,-1], [-1,1], [1,1], [1,-1]]).float().view(1,4,2)
     letters = ['A', 'B', 'C', 'D']
     y = torch.tensor([[0],[1],[2],[3]]).float()
     hidden = torch.zeros(1,1,2)
-    fig, axs = plt.subplots(n_points, len(layers)+1, figsize=(5*len(layers)+5, 5*n_points))
+    fig, axs = plt.subplots(n_points, len(layers)+1, figsize=(5*len(layers)+5, 6*n_points))
     axs = np.atleast_2d(axs)
 
     identity_model = nn.Sequential()
@@ -246,15 +247,58 @@ def feature_spaces(model, mstates, hstates, gates, titles=None, bounded=None, bo
             hidden.detach(), 
             np.array([i]), 
             layer_name='input')
+        fs_plot = FeatureSpace(axs[i][0], False, boundary=False).load_data(data)
+        _ = FeatureSpace._update(0, fs_plot, colors=['k','gray','g','b','r'], s=100)
+        axs[i][0].set_title(titles[0]) # 'hidden state'
+        if layers[-1] in bounded:
+            axs[i][0].set_xlim([-1.05, 1.05])
+            axs[i][1].set_ylim([-1.05, 1.05])
+        else:
+            axs[i][0].set_xlim(bounds)
+            axs[i][0].set_ylim(bounds)
+        
+        for j, layer in enumerate(layers):
+            c = i + 1
+            data = build_feature_space(model, [mstates[i]], hidden.detach(), np.array([c]), layer_name=layer)
+            fs_plot = FeatureSpace(axs[i][j+1], False, boundary=False).load_data(data)
+            _ = FeatureSpace._update(0, fs_plot, colors=['k','gray','g', 'b', 'r'], s=100)
+            if layer in gates.keys():
+                axs[i][j+1].set_title(titles[j+1][:-1] + '\ [' + ','.join(['{:.2f}'.format(v) for v in gates[layer][i]]) + ']$')
+            else:
+                axs[i][j+1].set_title(titles[j+1])
+            
+            if layer in bounded:
+                axs[i][j+1].set_xlim([-1.05, 1.05])
+                axs[i][j+1].set_ylim([-1.05, 1.05])
+            else:
+                axs[i][j+1].set_xlim(bounds)
+                axs[i][j+1].set_ylim(bounds)
+        hidden = model(hidden)
+
+    pad = 5 
+    for row, ax in enumerate(axs[:,0]):
+        ax.annotate('Input #{}'.format(row), xy=(0,0.5), xytext=(-ax.yaxis.labelpad-pad, 0),
+            xycoords=ax.yaxis.label, textcoords='offset points', size='large',
+            ha='right', va='center')
+    fig.tight_layout()
+    if n_points == 1:
+        fig.subplots_adjust(left=0.1, top=0.82)
+    else:
+        fig.subplots_adjust(left=3/(3+(i+2)*5), top=0.95)
+    plt.savefig('test.png')
+    return fig 
 
 # 'linear_hidden' and 'linear_input' are Layers
 # X: [4,2]
 def figure8(linear_hidden, linear_input, X):
-    # cell state, model state, hidden state
+    # rcell: Sequential(), mstates: list of OrderedDict, hstates: list of tensor of [1,1,2]
     rcell, mstates, hstates, _ = generate_rnn_states(linear_hidden, linear_input, X.unsqueeze(0))
+    print("RCELL: ", rcell)
+    print("MSTATES: ", mstates)
+    print("HSTATES: ", hstates)
     titles = [ 
-        r'$hidden\ state\ {h}',
-        r'$transformed\ state\ )t_h$',
+        r'$hidden\ state\ (h)$',
+        r'$transformed\ state\ (t_h)$',
         r'$adding\ t_x (t_h+t_x)$',
         r'$activated\ state$' + '\n' + r'$h=tanh(t_h+t_x)$'
     ]
