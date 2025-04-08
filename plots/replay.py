@@ -172,10 +172,12 @@ class FeatureSpace(Basic):
         return fs.lines 
         
 # Build a FeatureSpace object for plotting and animating
-# model: identity model, with only one Layer of Linear(2,2) with name 'input'
+# model: 
+# - identity model, with only one Layer of Linear(2,2) with name 'input' for generating grids
+# - rnn cell
 # states: [model.state_dict()]
 # X: hidden state [1,1,2]
-# y: point number i-th
+# y: point number i-th [i]
 # layer_name: 'input' 
 def build_feature_space(model, states, X, y, layer_name=None, 
     contour_points=1000, xlim=(-1,1), ylim=(-1,1), display_grid=True, epoch_start=0, epoch_end=-1):
@@ -196,9 +198,12 @@ def build_feature_space(model, states, X, y, layer_name=None,
         activation_idx = np.argmax(matches)
     else:
         raise AttributeError("No layer named {}".format(layer_name))
+    
+    # activation_idx: 1; then 1/2/3
     if layer_name is None:
         layer_name = layers[activation_idx][0]
     
+    # make sure dimension of the last Layer is 2
     try:
         final_dims = layers[activation_idx][1].out_features
     except:
@@ -229,10 +234,13 @@ def build_feature_space(model, states, X, y, layer_name=None,
     bent_inputs = []
     bent_contour_lines = []
     bent_preds = []
+    # epoch_start: 0, epoch_end+1: 1
     for epoch in range(epoch_start, epoch_end+1):
-        # {'input': [1,22000,2]}
-        X_values = get_values_for_epoch(model, states, epoch, grid_lines.reshape(-1,2))
-        bent_inputs.append(X_values[layer_name]) # [1,22000,2]
+        ## For scatter point
+        # X: [1,1,2] -> X_values: {'input': array of [1,1,2]}, then {'th':array, 'addtx':array, 'activation':array}
+        X_values = get_values_for_epoch(model, states, epoch, X) 
+        bent_inputs.append(X_values[layer_name]) 
+        ## For grid
         if input_dims == 2 and display_grid:
             # {'input': [1,22000,2]}
             grid_values = get_values_for_epoch(model, states, epoch, grid_lines.reshape(-1,2))
@@ -253,7 +261,7 @@ def build_feature_space(model, states, X, y, layer_name=None,
     bent_line_data = FeatureSpaceLines(grid=bent_lines, input=bent_inputs, contour=bent_contour_lines)
     _feature_space_data = FeatureSpaceData(
         line=line_data, 
-        bent_line=bent_line_data, 
+        bent_line=bent_line_data, ## NOTICE: this consists of bent_point(s), bent_grids & bent_contours
         prediction=bent_preds, target=y)
     return _feature_space_data
 

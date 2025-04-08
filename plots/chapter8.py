@@ -241,6 +241,7 @@ def feature_spaces(model, mstates, hstates, gates, titles=None, bounded=None, bo
         bounded = [] 
     
     for i in range(n_points):
+        # 0-image: initial grid and initial hidden state
         data = build_feature_space(
             identity_model, 
             [identity_model.state_dict()], 
@@ -257,6 +258,7 @@ def feature_spaces(model, mstates, hstates, gates, titles=None, bounded=None, bo
             axs[i][0].set_xlim(bounds)
             axs[i][0].set_ylim(bounds)
         
+        # 1st-, 2nd- and 3rd- images: grids and rotated points after each layer of the RNNCell
         for j, layer in enumerate(layers):
             c = i + 1
             data = build_feature_space(model, [mstates[i]], hidden.detach(), np.array([c]), layer_name=layer)
@@ -293,9 +295,6 @@ def feature_spaces(model, mstates, hstates, gates, titles=None, bounded=None, bo
 def figure8(linear_hidden, linear_input, X):
     # rcell: Sequential(), mstates: list of OrderedDict, hstates: list of tensor of [1,1,2]
     rcell, mstates, hstates, _ = generate_rnn_states(linear_hidden, linear_input, X.unsqueeze(0))
-    print("RCELL: ", rcell)
-    print("MSTATES: ", mstates)
-    print("HSTATES: ", hstates)
     titles = [ 
         r'$hidden\ state\ (h)$',
         r'$transformed\ state\ (t_h)$',
