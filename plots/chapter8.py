@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap, LinearSegmentedColormap
 import torch
 import torch.nn as nn
 from copy import deepcopy
@@ -363,6 +364,103 @@ def transformed_inputs(linear_input, basic_corners=None, basic_letters=None, bas
         fig.tight_layout()
         plt.savefig('test.png')
         return fig
+
+def hex_to_rgb(value):
+    value = value.strip("#") # '#F0AAFF' -> 'F0AAFF'
+    lv = len(value) # 6
+    return tuple(int(value[i: i+lv//3], 16) for i in range(0, lv, lv//3)) # i = 0/2/4
+
+# RGB values in range [0,1]
+def rgb_to_dec(value):
+    return [v/256 for v in value]
+
+# if 'float_list' provided: each color in 'hex list' is mapped to respective location in 'float_list'
+# else: color map graduates linearly between each color in 'hex_list'
+def get_continuous_cmap(hex_list, float_list=None):
+    rgb_list = [rgb_to_dec(hex_to_rgb(i)) for i in hex_list]
+    if float_list:
+        pass 
+    else:
+        float_list = list(np.linspace(0, 1, len(rgb_list))) # [0, 0.49, 0.99]
+    cdict = dict()
+    for num, col in enumerate(['red', 'green', 'blue']):
+        # {'red': [ [0,r-value-of-0,r-value-of-0], [0.49,r-value-of-1,r-value-of-1], [0.99,r-value-of-2,r-value-of-2] ],
+        # 'green': [ [0,g-value-of-0,g-value-of-0], [0.49,g-value-of-1,g-value-of-1], [0.99,g-value-of-2,g-value-of-2] ],
+        # 'blue': [ [0,b-value-of-0,b-value-of-0], [0.49,b-value-of-1,b-value-of-1], [0.99,b-value-of-2,b-value-of-2] ] } 
+        col_list = [[float_list[i], rgb_list[i][num], rgb_list[i][num]] for i in range(len(float_list))]
+        cdict[col] = col_list 
+    cmp = LinearSegmentedColormap('my_cmp', segmentdata=cdict, N=256)
+    return cmp 
+
+def sigmoid(z):
+    return 1/(1+np.exp(-z))
+
+# model: classifier
+def probability_contour(ax, model, device, X, y, threshold, cm=None, cm_bright=None, cbar=True, s=None):
+    if cm is None:
+        cm = plt.cm.RdBu
+    if cm_bright is None:
+        cm_bright = ListedColormap(['#FF0000', '#0000FF'])
+    h = 0.02 # step size in the mesh
+    x_min, x_max = -1.1, 1.1
+    y_min, y_max = -1.1, 1.1
+    xx, yy = np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h)) # [110,110] each
+    # np.c_ : concatenate along the 2nd axis -> [12100,2]
+    logits = model( torch.as_tensor(np.c_[xx.ravel(), yy.ravel()]).float().to(device) )
+    logits = logits.detach().cpu().numpy().reshape(xx.shape) # [110,110]
+    yhat = sigmoid(logits)
+    ax.contour(xx, yy, yhat, levels=[threshold], )
+
+    ax.set_xlim(xx.min(), xx.max())
+    ax.set_ylim(yy.min(), yy.max())
+    ax.set_xlabel(r'$X_1$')
+    ax.set_ylabel(r'$X_2$')
+    ax.set_title(r'$\sigma(z) = P(y=1)')
+    ax.grid(False)
+    return ax
+
+# model: SquareModel
+def canonical_contour(model, basic_corners=None, basic_colors=None, cell=False, ax=None, supertitle='', cbar=True, attr='hidden'):
+    if basic_corners is None:
+        basic_corners = np.array([[-1,-1], [-1,1],[1,1],[1,-1]])
+    if basic_colors is None:
+        basic_colors = ['gray', 'g', 'r', 'b']
+    corners_clock = []
+    corners_anti = []
+    color_corners = []
+    for b in range(4):
+        corners = np.concatenate([basic_corners[b:], basic_corners[:b]]) # [A,B,C,D]/[B,C,D,A]/[C,D,A,B]/[D,A,B,C]
+        corners_clock.append(torch.as_tensor(corners[:]).float())
+        corners_anti.append(torch.as_tensor(np.concatenate([corners[:1], corners[1:][::-1]])).float()) # [A,D,C,B]/[B,A,D,C]/[C,B,A,D]/[D,C,B,A]
+        color_corners.append(np.concatenate([basic_colors[b:], basic_colors[:b]])[0]) # color of the starting corner
+    points = torch.stack([*corners_clock, *corners_anti]) # 4 corners clock-wise + 4 corners anti-clockwise [8,4,2]
+    hex_list = ['#FF3300', '#FFFFFF', '#000099']
+    new_cmap = get_continuous_cmap(hex_list)
+    device = list(model.parameters())[0].device.type
+    if ax is None:
+        fig, ax = plt.subplots(1, 1, figsize=(5,4))
+    else:
+        fig = ax.get_figure()
+    model(points.to(device))
+    probability_contour(
+        ax, 
+        model.classifier, 
+        device, 
+        getattr(model, attr).detach().cpu().squeeze(), # hidden [1,N,H]
+        [0,1,2,3]*2, # class 
+        0.5, # threshold
+        cm=new_cmap,
+        cm_bright=ListedColormap(['gray', 'g', 'b', 'r']),
+        s=200,
+        cbar=cbar
+        )
+    ax.set_title(f'{supertitle}Hidden State #{len(basic_corners)-1}') # final hidden state only
+    ax.set_xlabel(r'$h_0$')
+    ax.set_ylabel(r'$h_1$', rotation=0)
+    fig.tight_layout()
+    plt.savefig('test.png')
+    return fig 
+
 
 # 'linear_hidden' and 'linear_input' are Layers
 # X: [4,2]

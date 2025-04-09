@@ -123,11 +123,11 @@ fig = plot_data(points, directions)
 ## Square model
 test_points, test_directions = generate_sequences(seed=19)
 train_data = TensorDataset(
-    torch.as_tensor(points).float(),
+    torch.as_tensor(np.array(points)).float(),
     torch.as_tensor(directions).view(-1,1).float()
 )
 test_data = TensorDataset(
-    torch.as_tensor(test_points).float(),
+    torch.as_tensor(np.array(test_points)).float(),
     torch.as_tensor(test_directions).view(-1,1).float()
 )
 train_loader = DataLoader(
@@ -170,3 +170,5 @@ print("Recall on test dataset: ", StepByStep.loader_apply(test_loader, sbs_rnn.c
 state = model.basic_rnn.state_dict()
 print("Square model state on input: ", state['weight_ih_l0'], state['bias_ih_l0'])
 fig = figure13(model.basic_rnn)
+# Final hidden states
+fig = canonical_contour(model)
