@@ -162,13 +162,20 @@ optimizer= optim.Adam(model.parameters(), lr=0.01)
 sbs_rnn = StepByStep(model, loss, optimizer)
 sbs_rnn.set_loaders(train_loader, test_loader)
 sbs_rnn.train(100)
-fig = sbs_rnn.plot_losses()
-print("Recall on test dataset: ", StepByStep.loader_apply(test_loader, sbs_rnn.correct)) # 99%
+# fig = sbs_rnn.plot_losses()
+# print("Recall on test dataset: ", StepByStep.loader_apply(test_loader, sbs_rnn.correct)) # 99%
 
-## Visualizing the model
-# Transformed input 
-state = model.basic_rnn.state_dict()
-print("Square model state on input: ", state['weight_ih_l0'], state['bias_ih_l0'])
-fig = figure13(model.basic_rnn)
-# Final hidden states
-fig = canonical_contour(model)
+# ## Visualizing the model
+# # Transformed input of 4 basic corners
+# state = model.basic_rnn.state_dict()
+# print("Square model state on input: ", state['weight_ih_l0'], state['bias_ih_l0'])
+# fig = figure13(model.basic_rnn)
+# # Final hidden states on 4 toying clockwise- and 4 counterclockwise-combinations-of-corners (totally 8)
+# fig = canonical_contour(model)
+
+# Final hidden states of our real sequence (128 samples)
+fig = hidden_states_contour(model, points, directions) # 128 samples, each [4,2] is a sequence to be predicted
+
+## Hidden state observation after EACH OPERATION (column) when EACH CORNER (row) arrives
+# last column of one row is the input (1st column) of the next row
+fig = figure16(model.basic_rnn)

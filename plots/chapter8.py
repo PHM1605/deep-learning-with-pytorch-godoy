@@ -409,14 +409,18 @@ def probability_contour(ax, model, device, X, y, threshold, cm=None, cm_bright=N
     logits = model( torch.as_tensor(np.c_[xx.ravel(), yy.ravel()]).float().to(device) )
     logits = logits.detach().cpu().numpy().reshape(xx.shape) # [110,110]
     yhat = sigmoid(logits)
-    ax.contour(xx, yy, yhat, levels=[threshold], )
-
+    ax.contour(xx, yy, yhat, levels=[threshold], cmap='Greys', vmin=0, vmax=1) # draw the line where yhat==0.5
+    contour = ax.contourf(xx, yy, yhat, 25, cmap=cm, alpha=0.8, vmin=0, vmax=1) # surf 25 levels
+    ax.scatter(X[:,0], X[:,1], c=y, cmap=cm_bright, edgecolors='k', s=s) # 8 hidden points; colormap ['gray','g','b','r']
     ax.set_xlim(xx.min(), xx.max())
     ax.set_ylim(yy.min(), yy.max())
     ax.set_xlabel(r'$X_1$')
     ax.set_ylabel(r'$X_2$')
     ax.set_title(r'$\sigma(z) = P(y=1)')
     ax.grid(False)
+    if cbar:
+        ax_c = plt.colorbar(contour)
+        ax_c.set_ticks([0, 0.25, 0.5, 0.75, 1])
     return ax
 
 # model: SquareModel
@@ -446,7 +450,7 @@ def canonical_contour(model, basic_corners=None, basic_colors=None, cell=False, 
         ax, 
         model.classifier, 
         device, 
-        getattr(model, attr).detach().cpu().squeeze(), # hidden [1,N,H]
+        getattr(model, attr).detach().cpu().squeeze(), # hidden [1,8,2]->squeeze to [8,2]
         [0,1,2,3]*2, # class 
         0.5, # threshold
         cm=new_cmap,
@@ -454,6 +458,12 @@ def canonical_contour(model, basic_corners=None, basic_colors=None, cell=False, 
         s=200,
         cbar=cbar
         )
+    pos = getattr(model, attr).squeeze()[:4].detach().cpu().numpy()
+    neg = getattr(model, attr).squeeze()[4:].detach().cpu().numpy()
+    for p in pos:
+        ax.text(p[0]-0.05, p[1]-0.03, '+', c='w', fontsize=14) # mark labels '+' on points
+    for n in neg:
+        ax.text(n[0]-0.03, n[1]-0.05, '-', c='w', fontsize=14) # mark labels '-' on points
     ax.set_title(f'{supertitle}Hidden State #{len(basic_corners)-1}') # final hidden state only
     ax.set_xlabel(r'$h_0$')
     ax.set_ylabel(r'$h_1$', rotation=0)
@@ -461,6 +471,36 @@ def canonical_contour(model, basic_corners=None, basic_colors=None, cell=False, 
     plt.savefig('test.png')
     return fig 
 
+def hidden_states_contour(model, points, directions, cell=False, attr='hidden'):
+    fig = plt.figure(figsize=(12, 10))
+    gs = fig.add_gridspec(2, 12)
+    hex_list = ['#FF3300', '#FFFFFF', '#000099']
+    new_cmap = get_continuous_cmap(hex_list)
+    device = list(model.parameters())[0].device.type
+    # figure 0: we use only 1 corner to predict; figure 1: we use 2 corners; figure 2: 3 corners; figure 3: all 4 corners => the best
+    for i in range(4):
+        ci = i - (2 if i>=2 else 0) # i=0/1->ci=0/1; i=2/3->ci=0/1
+        ri = (i>=2)
+        ax = fig.add_subplot(gs[ri, ci*5+1 : (ci+1)*5+1+(ci==1)])
+        # torch.as_tensor(points): [128,4,2] => 
+        model( torch.as_tensor(np.array(points)).float()[:,:i+1,:].to(device) )
+        probability_contour(
+            ax,
+            model.classifier,
+            device,
+            getattr(model, attr).detach().cpu().squeeze(),
+            directions.astype(int),
+            0.5,
+            cm = new_cmap,
+            cm_bright = ListedColormap(['#FF3300', '#000099']),
+            cbar=ci==1
+        )
+        ax.set_title(f'Hidden State #{i}')
+        ax.set_xlabel(r'$h_0$')
+        ax.set_ylabel(r'$h_1$', rotation=0)
+    fig.tight_layout()
+    plt.savefig('test.png')
+    return fig 
 
 # 'linear_hidden' and 'linear_input' are Layers
 # X: [4,2]
@@ -481,3 +521,6 @@ def figure13(rnn):
     linear_hidden, linear_input = disassemble_rnn(rnn, layer='_l0')
     rcell, mstates, hstates, _ = generate_rnn_states(linear_hidden, linear_input, square)
     return transformed_inputs(linear_input, title='RNN')
+
+def figure16(rnn):
+    pass
