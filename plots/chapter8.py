@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import patches 
 from matplotlib.colors import ListedColormap, LinearSegmentedColormap
 import torch
 import torch.nn as nn
@@ -571,7 +572,7 @@ def paths_clock_and_counter(linear_hidden, linear_input, b=0, basic_letters=None
             ax.set_title(f'{titles[stop]} ({letters[n]})')
             for i, (s, c) in enumerate(zip([10,7,4,1], colors)): # c=colors: 'r','b','g','gray'; s: 10,7,4,1; i: 0,1,2,3
                 if i>=stop: # stop=3=>'gray'; stop=2=>'g'/'gray'; stop=1=>'b'/'g'/'gray'; stop=0=>'r'/'b'/'g'/'gray' 
-                    for n, j in enumerate(range(s-1, s+2)): # [9,10,11], [6,7,8], [3,4,5], [0,1,2]
+                    for n, j in enumerate(range(s-1, s+2)): # j: [9,10,11], [6,7,8], [3,4,5], [0,1,2]
                         line = ax.plot(*path[j:j+2].T, linewidth=1, marker='o', c=c)[0]
                         add_arrow(line, size=15)
                         if i==stop: # put text at the ending color
@@ -583,7 +584,21 @@ def paths_clock_and_counter(linear_hidden, linear_input, b=0, basic_letters=None
             ax.set_ylabel(r"$h_1$", rotation=0)
             ax.set_xlim([-7.2, 7.2])
             ax.set_ylim([-7.2, 7.2])
+
+            # Create limit rectangle range (by 'tanh' activation); arguments: (starting_x, starting_y), width, height....
+            rect = patches.Rectangle((-1,-1), 2, 2, linewidth=1, edgecolor='r', facecolor='none')
+            ax.add_patch(rect)
+    # if we draw both clockwise and counter-clockwise
+    if not only_clock:
+        for row, ax in enumerate(axs_rows[:, 0]): # 1st axes-collection column
+            ax.annotate('Start at {}\n{}Clockwise'.format(basic_letters[b], 'Counter- \n' if row else ''),
+                xy=(0, 0.5), xytext=(-ax.yaxis.labelpad-pad, 0),
+                xycoords=ax.yaxis.label, textcoords='offset points',
+                size='large', ha='right', va='center'
+            )
+
     fig.tight_layout()
+    fig.subplots_adjust(left=3/(3+5*(i+2)), top=0.9)
     plt.savefig('test.png')
 
 # 'linear_hidden' and 'linear_input' are Layers
