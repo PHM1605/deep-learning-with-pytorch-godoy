@@ -179,3 +179,5 @@ fig = hidden_states_contour(model, points, directions) # 128 samples, each [4,2]
 ## Hidden state observation after EACH OPERATION (column) when EACH CORNER (row) arrives
 # last column of one row is the input (1st column) of the next row
 fig = figure16(model.basic_rnn)
+# hidden point progression after EACH POINT (each different color) arrives
+fig = figure17(model.basic_rnn)

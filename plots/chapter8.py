@@ -502,6 +502,60 @@ def hidden_states_contour(model, points, directions, cell=False, attr='hidden'):
     plt.savefig('test.png')
     return fig 
 
+# b: beginning index of corners; usually 0
+def build_paths(linear_hidden, linear_input, b=0, basic_corners=None, basic_colors=None):
+    device = list(linear_input.parameters())[0].device.type 
+    if basic_corners is None:
+        basic_corners = np.array([[-1,-1], [-1,1], [1,1], [1,-1]])
+    if basic_colors is None:
+        basic_colors = ['gray', 'g', 'b', 'r']
+    corners = np.concatenate([basic_corners[b:], basic_corners[:b]])
+    color_corners = np.concatenate([basic_colors[b:], basic_colors[:b]])
+    corners_clock = torch.as_tensor(corners[:]).float() # [4,2]
+    corners_anti = torch.as_tensor(np.concatenate([corners[:1], corners[1:][::-1]])).float() # [4,2]
+    # activations: [[{'h':...}, {}, {}, {}], [{'h':...},{},{},{}]] => 1st list for clockwise, 2nd list for counter-clockwise
+    activations = []
+    for inputs in [corners_clock, corners_anti]:
+        activations.append([])
+        hidden = torch.zeros(1, 1, linear_hidden.in_features) # [1,1,2]
+        for i in range(len(inputs)):
+            lh = linear_hidden(hidden.to(device))
+            li = linear_input(inputs[i].to(device))
+            lo = lh + li 
+            hidden = torch.tanh(lo)
+            activations[-1].append({
+                'h': lh.squeeze().tolist(),
+                'o': lo.squeeze().tolist(),
+                'a': hidden.squeeze().tolist()
+            })
+    path_clock = np.concatenate([
+        np.array([[0,0]]),
+        np.array( [list(step.values()) for step in activations[0]] ).reshape(-1,2) # [3,2]; 1st row: after linear-hidden; 2nd row: after 'add'; 3rd row: after 'activation'
+    ], axis=0)
+    path_anti = np.concatenate([
+        np.array([[0,0]]),
+        np.array( [list(step.values()) for step in activations[1]] ).reshape(-1,2)
+    ], axis=0)
+    return path_clock, path_anti, color_corners
+
+def paths_clock_and_counter(linear_hidden, linear_input, b=0, basic_letters=None, only_clock=False):
+    if only_clock:
+        fig, axs_rows = plt.subplots(2, 2, figsize=(10,10))
+    else:
+        fig, axs_rows = plt.subplots(2, 4, figsize=(20,10))
+    axs_rows = np.atleast_2d(axs_rows)
+    names = ['th', 'tx', 'tanh']
+    xoff = [0.5, -0.5, 0.5, 0.5, -0.5]
+    yoff = [-0.6, -0.6, 0.5, -0.5, -0.5]
+    titles = ['Input #3', 'Input #2', 'Input #1', 'Input #0', 'Initial']
+    if basic_letters is None:
+        basic_letters = ['A', 'B', 'C', 'D']
+    pad = 5
+    path_clock, path_anti, color_corners = build_paths(linear_hidden, linear_input, b=b)
+    print(path_clock, path_anti, color_corners)
+    fig.tight_layout()
+
+
 # 'linear_hidden' and 'linear_input' are Layers
 # X: [4,2]
 def figure8(linear_hidden, linear_input, X):
@@ -523,4 +577,17 @@ def figure13(rnn):
     return transformed_inputs(linear_input, title='RNN')
 
 def figure16(rnn):
-    pass
+    square = torch.tensor([[-1,-1], [-1,1], [1,1], [1,-1]]).float().view(1, 4, 2)
+    linear_hidden, linear_input = disassemble_rnn(rnn, layer='_l0')
+    rcell, mstates, hstates, _ = generate_rnn_states(linear_hidden, linear_input, square)
+    titles = [
+        r'$hidden\ state\ (h)$',
+        r'$transformed\ state\ (t_h)$',
+        r'$adding\ t_x (t_h+t_x)$',
+        r'$activated\ state$' + '\n' + r'$h=tanh(t_h+t_x)$'
+    ]
+    return feature_spaces(rcell, mstates, hstates, {}, titles, bounded=['activation']) # n_points default = 4 points
+
+def figure17(rnn):
+    linear_hidden, linear_input = disassemble_rnn(rnn, layer='_l0')
+    return paths_clock_and_counter(linear_hidden, linear_input, only_clock=True)
