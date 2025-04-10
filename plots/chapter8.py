@@ -552,9 +552,39 @@ def paths_clock_and_counter(linear_hidden, linear_input, b=0, basic_letters=None
         basic_letters = ['A', 'B', 'C', 'D']
     pad = 5
     path_clock, path_anti, color_corners = build_paths(linear_hidden, linear_input, b=b)
-    print(path_clock, path_anti, color_corners)
-    fig.tight_layout()
+    
+    # row 0: clockwise; row 1: counter-clockwise
+    for row in range(2-only_clock):
+        if only_clock:
+            axs = axs_rows.flatten()
+        else:
+            axs = axs_rows[row]
+        path = [path_clock, path_anti][row] # [1+3*4,2]; 1 is initial 'hidden'; 4 corners coming to process 'hidden'; 3 is 'linear'+'add'+'activation'
+        if row: # anti-clockwise
+            letters = ['A', 'D', 'C', 'B']
+            colors = ['gray', 'r', 'b', 'g'][::-1]
+        else: # clockwise
+            letters = ['A', 'B', 'C', 'D']
+            colors = ['gray', 'g', 'b', 'r'][::-1]
+        
+        for n, (ax, stop) in enumerate(zip(axs, range(3,-1,-1))): # stop: 3,2,1,0, axes n: 0,1,2,3
+            ax.set_title(f'{titles[stop]} ({letters[n]})')
+            for i, (s, c) in enumerate(zip([10,7,4,1], colors)): # c=colors: 'r','b','g','gray'; s: 10,7,4,1; i: 0,1,2,3
+                if i>=stop: # stop=3=>'gray'; stop=2=>'g'/'gray'; stop=1=>'b'/'g'/'gray'; stop=0=>'r'/'b'/'g'/'gray' 
+                    for n, j in enumerate(range(s-1, s+2)): # [9,10,11], [6,7,8], [3,4,5], [0,1,2]
+                        line = ax.plot(*path[j:j+2].T, linewidth=1, marker='o', c=c)[0]
+                        add_arrow(line, size=15)
+                        if i==stop: # put text at the ending color
+                            ax.text(path[j+1,0]+xoff[i], path[j+1,1]+yoff[i], names[n], c=c, fontsize=12)
 
+            if stop==0:
+                ax.scatter(*path[-1], c=colors[0], zorder=100, marker='*', s=256) # put a start at final destination of hidden point
+            ax.set_xlabel(r"$h_0$")
+            ax.set_ylabel(r"$h_1$", rotation=0)
+            ax.set_xlim([-7.2, 7.2])
+            ax.set_ylim([-7.2, 7.2])
+    fig.tight_layout()
+    plt.savefig('test.png')
 
 # 'linear_hidden' and 'linear_input' are Layers
 # X: [4,2]
