@@ -137,31 +137,31 @@ test_loader = DataLoader(
     test_data, batch_size=16
 )
 
-class SquareModel(nn.Module):
-    def __init__(self, n_features, hidden_dim, n_outputs):
-        super(SquareModel, self).__init__()
-        self.hidden_dim = hidden_dim
-        self.n_features = n_features 
-        self.n_outputs = n_outputs 
-        self.hidden = None 
-        self.basic_rnn = nn.RNN(self.n_features, self.hidden_dim, batch_first=True)
-        self.classifier = nn.Linear(self.hidden_dim, self.n_outputs)
-    def forward(self, X):
-        # X: [N, L, F]
-        # output: [N, L, H]
-        # final hidden state: [1, N, H]
-        batch_first_output, self.hidden = self.basic_rnn(X)
-        last_output = batch_first_output[:, -1] # [N,1,H]
-        out = self.classifier(last_output) # [N,1,n_outputs]
-        return out.view(-1, self.n_outputs)
+# class SquareModel(nn.Module):
+#     def __init__(self, n_features, hidden_dim, n_outputs):
+#         super(SquareModel, self).__init__()
+#         self.hidden_dim = hidden_dim
+#         self.n_features = n_features 
+#         self.n_outputs = n_outputs 
+#         self.hidden = None 
+#         self.basic_rnn = nn.RNN(self.n_features, self.hidden_dim, batch_first=True)
+#         self.classifier = nn.Linear(self.hidden_dim, self.n_outputs)
+#     def forward(self, X):
+#         # X: [N, L, F]
+#         # output: [N, L, H]
+#         # final hidden state: [1, N, H]
+#         batch_first_output, self.hidden = self.basic_rnn(X)
+#         last_output = batch_first_output[:, -1] # [N,1,H]
+#         out = self.classifier(last_output) # [N,1,n_outputs]
+#         return out.view(-1, self.n_outputs)
 
-torch.manual_seed(21)
-model = SquareModel(n_features=2, hidden_dim=2, n_outputs=1)
-loss = nn.BCEWithLogitsLoss()
-optimizer= optim.Adam(model.parameters(), lr=0.01)
-sbs_rnn = StepByStep(model, loss, optimizer)
-sbs_rnn.set_loaders(train_loader, test_loader)
-sbs_rnn.train(100)
+# torch.manual_seed(21)
+# model = SquareModel(n_features=2, hidden_dim=2, n_outputs=1)
+# loss = nn.BCEWithLogitsLoss()
+# optimizer= optim.Adam(model.parameters(), lr=0.01)
+# sbs_rnn = StepByStep(model, loss, optimizer)
+# sbs_rnn.set_loaders(train_loader, test_loader)
+# sbs_rnn.train(100)
 # fig = sbs_rnn.plot_losses()
 # print("Recall on test dataset: ", StepByStep.loader_apply(test_loader, sbs_rnn.correct)) # 99%
 
@@ -173,11 +173,16 @@ sbs_rnn.train(100)
 # # Final hidden states on 4 toying clockwise- and 4 counterclockwise-combinations-of-corners (totally 8)
 # fig = canonical_contour(model)
 
-# Final hidden states of our real sequence (128 samples)
-fig = hidden_states_contour(model, points, directions) # 128 samples, each [4,2] is a sequence to be predicted
+# # Final hidden states of our real sequence (128 samples)
+# fig = hidden_states_contour(model, points, directions) # 128 samples, each [4,2] is a sequence to be predicted
 
-## Hidden state observation after EACH OPERATION (column) when EACH CORNER (row) arrives
-# last column of one row is the input (1st column) of the next row
-fig = figure16(model.basic_rnn)
-# hidden point progression after EACH POINT (each different color) arrives
-fig = figure17(model.basic_rnn)
+# ## Hidden state observation after EACH OPERATION (column) when EACH CORNER (row) arrives
+# # last column of one row is the input (1st column) of the next row
+# fig = figure16(model.basic_rnn)
+# # hidden point progression after EACH POINT (each different color) arrives
+# fig = figure17(model.basic_rnn)
+
+## GRU - Gated Recurrent Unit 
+# r=ResetGate, z=UpdateGate; [1,1] and [0,0] respectively for normal RNN cell
+# h_new = (1-z)*tanh(r*t_h + t_x) + z*h_old 
+# r and z are learnt from two RNN cells with softmax-activation
