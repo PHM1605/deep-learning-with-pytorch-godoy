@@ -19,7 +19,7 @@ from plots.chapter8 import *
 # fig = plot_sequences()
 
 points, directions = generate_sequences(n=128, seed=13)
-fig = plot_data(points, directions)
+# fig = plot_data(points, directions)
 
 # ## RNN Cell
 # hidden_state = torch.zeros(2)
@@ -120,7 +120,7 @@ fig = plot_data(points, directions)
 # print("Total output and total final hidden state (built in): ", out, hidden)
 # print("Is last output element same as final hidden state? ", out[:,-1] == hidden.permute(1,0,2).view(1,-1)) # No
 
-## Square model
+## Data preparation
 test_points, test_directions = generate_sequences(seed=19)
 train_data = TensorDataset(
     torch.as_tensor(np.array(points)).float(),
@@ -137,6 +137,7 @@ test_loader = DataLoader(
     test_data, batch_size=16
 )
 
+# # Square model
 # class SquareModel(nn.Module):
 #     def __init__(self, n_features, hidden_dim, n_outputs):
 #         super(SquareModel, self).__init__()
@@ -182,7 +183,116 @@ test_loader = DataLoader(
 # # hidden point progression after EACH POINT (each different color) arrives
 # fig = figure17(model.basic_rnn)
 
-## GRU - Gated Recurrent Unit 
-# r=ResetGate, z=UpdateGate; [1,1] and [0,0] respectively for normal RNN cell
-# h_new = (1-z)*tanh(r*t_h + t_x) + z*h_old 
-# r and z are learnt from two RNN cells with softmax-activation
+# ## GRU - Gated Recurrent Unit 
+# # r=ResetGate, z=UpdateGate; [1,1] and [0,0] respectively for normal RNN cell
+# # h_new = (1-z)*tanh(r*t_h + t_x) + z*h_old 
+# # r and z are learnt from two RNN cells with softmax-activation
+# n_features = 2
+# hidden_dim = 2
+# torch.manual_seed(17)
+# gru_cell = nn.GRUCell(input_size=n_features, hidden_size=hidden_dim)
+# gru_state = gru_cell.state_dict()
+# print("GRU State: ", gru_state) # GRU cell concatenates 3 shapes for r, z and n (main RNN cell)
+# Wx, bx = gru_state['weight_ih'], gru_state['bias_ih'] # [6,2], [6], #columns = #input features
+# Wh, bh = gru_state['weight_hh'], gru_state['bias_hh'] # [6,2], [6]
+# Wxr, Wxz, Wxn = Wx.split(hidden_dim, dim=0) # each [2,2]
+# bxr, bxz, bxn = bx.split(hidden_dim, dim=0) # each [2]
+# Whr, Whz, Whn = Wh.split(hidden_dim, dim=0) # each [2,2]
+# bhr, bhz, bhn = bh.split(hidden_dim, dim=0) # each [2]
+
+# def linear_layers(Wx, bx, Wh, bh):
+#     hidden_dim, n_features = Wx.size()
+#     lin_input = nn.Linear(n_features, hidden_dim)
+#     lin_input.load_state_dict({'weight':Wx, 'bias':bx})
+#     lin_hidden = nn.Linear(hidden_dim, hidden_dim)
+#     lin_hidden.load_state_dict({'weight':Wh, 'bias':bh})
+#     return lin_hidden, lin_input 
+
+# # reset gate layers - red
+# r_hidden, r_input = linear_layers(Wxr, bxr, Whr, bhr)
+# # update gate layers - blue 
+# z_hidden, z_input = linear_layers(Wxz, bxz, Whz, bhz)
+# # candidate state layers - black
+# n_hidden, n_input = linear_layers(Wxn, bxn, Whn, bhn)
+
+# def reset_gate(h, x):
+#     thr = r_hidden(h)
+#     txr = r_input(x)
+#     r = torch.sigmoid(thr+txr)
+#     return r 
+
+# def update_gate(h, x):
+#     thz = z_hidden(h)
+#     txz = z_input(x)
+#     z = torch.sigmoid(thz + txz)
+#     return z 
+
+# def candidate_n(h, x, r):
+#     thn = n_hidden(h)
+#     txn = n_input(x)
+#     n = torch.tanh(r*thn+txn)
+#     return n 
+
+# initial_hidden = torch.zeros(1, hidden_dim)
+# X = torch.as_tensor(points[0]).float()
+# first_corner = X[0:1]
+# r = reset_gate(initial_hidden, first_corner)
+# print('r: ', r) # [1,2]
+# n = candidate_n(initial_hidden, first_corner, r)
+# print('n: ', n)
+# z = update_gate(initial_hidden, first_corner)
+# print('z: ', z)
+# h_prime = (1-z)*n + z*initial_hidden 
+# print('h_prime: ', h_prime)
+# print('Comparing with built-in lib: ', gru_cell(first_corner))
+
+# class SquareModelGRU(nn.Module):
+#     def __init__(self, n_features, hidden_dim, n_outputs):
+#         super(SquareModelGRU, self).__init__()
+#         self.hidden_dim = hidden_dim 
+#         self.n_features = n_features 
+#         self.n_outputs = n_outputs 
+#         self.hidden = None
+#         self.basic_rnn = nn.GRU(self.n_features, self.hidden_dim, batch_first=True)
+#         self.classifier = nn.Linear(self.hidden_dim, self.n_outputs)
+    
+#     def forward(self, X):
+#         # X is batch-first: [N,L,F]; output is batch-first: [N,L,H]
+#         # final hidden state is batch-second: [1,N,H]
+#         batch_first_output, self.hidden = self.basic_rnn(X)
+#         last_output = batch_first_output[:,-1] # [N,1,H]
+#         out = self.classifier(last_output)
+#         return out.view(-1, self.n_outputs) # [N,n_outputs]
+
+# torch.manual_seed(21)
+# model = SquareModelGRU(n_features=2, hidden_dim=2, n_outputs=1)
+# loss = nn.BCEWithLogitsLoss()
+# optimizer = optim.Adam(model.parameters(), lr=0.01)
+# sbs_gru = StepByStep(model, loss, optimizer)
+# sbs_gru.set_loaders(train_loader, test_loader)
+# sbs_gru.train(100)
+# fig = sbs_gru.plot_losses()
+# print("Validation result: ", StepByStep.loader_apply(test_loader, sbs_gru.correct)) # recall: 100%
+
+# ## Visualizing the model
+# # hidden states of RNN and GRU for 1 clockwise and 1 counter-clockwise sequence 
+# fig = figure20(sbs_rnn.model, sbs_gru.model)
+# plt.savefig('test.png')
+# # hidden states of RNN and GRU for all sequences
+# fig = hidden_states_contour(model, points, directions)
+# plt.savefig('test.png')
+# # hidden state over every operation performed inside the GRU (for 1 sequence of 4 corners)
+# fig = figure22(model.basic_rnn)
+
+## LSTM 
+# candidate hidden state (short-term memory): g = tanh(thg + txg)
+# new cell state (long-term-memory): c' = i*g + f*c; with i=input gate, f=forget gate; c=old cell state, g=candidate hidden state
+# new hidden state: h' = o*tanh(c'); with o=output gate
+# all gates have the form: i=sigmoid(thi+txi) with th = W*h+bias, tx=W*x+bias
+n_features = 2
+hidden_dim = 2
+torch.manual_seed(17)
+lstm_cell = nn.LSTMCell(input_size=n_features, hidden_size=hidden_dim)
+lstm_state = lstm_cell.state_dict()
+print("LSTM state: ", lstm_state) # weight_ih:[8,2], weight_hh:[8,2], bias_ih:[8], bias_hh:[8]
+

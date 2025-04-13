@@ -500,7 +500,6 @@ def hidden_states_contour(model, points, directions, cell=False, attr='hidden'):
         ax.set_xlabel(r'$h_0$')
         ax.set_ylabel(r'$h_1$', rotation=0)
     fig.tight_layout()
-    plt.savefig('test.png')
     return fig 
 
 # b: beginning index of corners; usually 0
@@ -601,6 +600,115 @@ def paths_clock_and_counter(linear_hidden, linear_input, b=0, basic_letters=None
     fig.subplots_adjust(left=3/(3+5*(i+2)), top=0.9)
     plt.savefig('test.png')
 
+def disassemble_gru(gru_model, layer=''):
+    hidden_size = gru_model.hidden_size 
+    input_size = gru_model.input_size 
+    state = gru_model.state_dict()
+    
+    Wx = state[f'weight_ih{layer}'].to('cpu')
+    bx = state[f'bias_ih{layer}'].to('cpu')
+    Wxr, Wxz, Wxn = Wx.split(hidden_size, dim=0)
+    bxr, bxz, bxn = bx.split(hidden_size, dim=0)
+    
+    Wh = state[f'weight_hh{layer}'].to('cpu')
+    bh = state[f'bias_hh{layer}'].to('cpu')
+    Whr, Whz, Whn = Wh.split(hidden_size, dim=0)
+    bhr, bhz, bhn = bh.split(hidden_size, dim=0)
+    
+    n_linear_hidden = nn.Linear(hidden_size, hidden_size)
+    n_linear_input = nn.Linear(input_size, hidden_size)
+    r_linear_hidden = nn.Linear(hidden_size, hidden_size)
+    r_linear_input = nn.Linear(input_size, hidden_size)
+    z_linear_hidden = nn.Linear(hidden_size, hidden_size)
+    z_linear_input = nn.Linear(input_size, hidden_size)
+
+    with torch.no_grad():
+        n_linear_hidden.weight = nn.Parameter(Whn)
+        n_linear_hidden.bias = nn.Parameter(bhn)
+        n_linear_input.weight= nn.Parameter(Wxn)
+        n_linear_input.bias = nn.Parameter(bxn)
+        
+        r_linear_hidden.weight = nn.Parameter(Whr)
+        r_linear_hidden.bias = nn.Parameter(bhr)
+        r_linear_input.weight = nn.Parameter(Wxr)
+        r_linear_input.bias = nn.Parameter(bxr)
+        
+        z_linear_hidden.weight = nn.Parameter(Whz)
+        z_linear_hidden.bias = nn.Parameter(bhz)
+        z_linear_input.weight = nn.Parameter(Wxz)
+        z_linear_input.bias = nn.Parameter(bxz)
+    
+    return (
+        (n_linear_hidden, n_linear_input),
+        (r_linear_hidden, r_linear_input),
+        (z_linear_hidden, z_linear_input)
+    )
+
+def build_gru_cell(linear_hidden):
+    model = nn.Sequential()
+    model.add_module('th', linear_hidden)
+    model.add_module('rmult', nn.Linear(2,2))
+    model.add_module('addtx', nn.Linear(2, 2))
+    model.add_module('activation', nn.Tanh())
+    model.add_module('zmult', nn.Linear(2,2))
+    model.add_module('addh', nn.Linear(2,2))
+    with torch.no_grad():
+        model.rmult.weight = nn.Parameter(torch.eye(2))
+        model.rmult.bias = nn.Parameter(torch.zeros(2))
+        model.addtx.weight = nn.Parameter(torch.eye(2))
+        model.addtx.bias = nn.Parameter(torch.zeros(2))
+        model.zmult.weight = nn.Parameter(torch.eye(2))
+        model.zmult.bias = nn.Parameter(torch.zeros(2))
+        model.addh.weight = nn.Parameter(torch.eye(2))
+        model.addh.bias = nn.Parameter(torch.zeros(2))
+    return model 
+
+# n_linear: (n_linear_hidden, n_linear_input)
+# r_linear: (r_linear_hidden, r_linear_input)
+# z_linear: (z_linear_hidden, z_linear_input)
+# X: [1,4,2]
+def generate_gru_states(n_linear, r_linear, z_linear, X):
+    hidden_states = []
+    model_states = []
+    rs = []
+    zs = []
+    hidden = torch.zeros(1, 1, 2)
+    tdata = n_linear[1](X) # [1,4,2]
+    gcell = build_gru_cell(n_linear[0])
+
+    for i in range(len(X.squeeze())):
+        hidden_states.append(hidden)
+        r = torch.sigmoid(r_linear[0](hidden) + r_linear[1](X[:,i:i+1,:]))
+        rs.append(r.squeeze().detach().tolist())
+        z = torch.sigmoid(z_linear[0](hidden) + z_linear[1](X[:,i:i+1,:]))
+        # Note: zs will store (1-z), not z
+        zs.append((1-z).squeeze().detach().tolist())
+        gcell = add_tx(gcell, tdata[:,i,:])
+        gcell = rgate(gcell, r)
+        gcell = zgate(gcell, 1-z)
+        gcell = add_h(gcell, (z*hidden)[:,0,:]) # (x*hidden): [1,1,2]
+        model_states.append(deepcopy(gcell.state_dict()))
+
+        hidden = gcell(hidden)
+    return gcell, model_states, hidden_states, {'rmult': rs, 'zmult': zs}
+
+
+# torch.diag([a,b]) => [[a,0], [0,b]]
+def rgate(model, r):
+    with torch.no_grad():
+        model.rmult.weight = nn.Parameter(torch.diag(r.squeeze()))
+    return model 
+
+def zgate(model, z):
+    with torch.no_grad():
+        model.zmult.weight = nn.Parameter(torch.diag(z.squeeze()))
+    return model 
+
+def add_h(model, hidden):
+    with torch.no_grad():
+        model.addh.bias = nn.Parameter(hidden)
+    return model
+
 # 'linear_hidden' and 'linear_input' are Layers
 # X: [4,2]
 def figure8(linear_hidden, linear_input, X):
@@ -636,3 +744,30 @@ def figure16(rnn):
 def figure17(rnn):
     linear_hidden, linear_input = disassemble_rnn(rnn, layer='_l0')
     return paths_clock_and_counter(linear_hidden, linear_input, only_clock=True)
+
+def figure20(model_rnn, model_gru):
+    fig = plt.figure(figsize=(11,5))
+    gs = fig.add_gridspec(1, 11)
+    titles = ['RNN', 'GRU']
+    models = [model_rnn, model_gru]
+    for i in range(2):
+        ax = fig.add_subplot(gs[0, i*5:(i+1)*5+(i==1)])
+        fig = canonical_contour(models[i], ax=ax, supertitle=f'{titles[i]}\n', cbar=i==1)
+    return fig 
+
+# rnn: SquareModelGRU
+def figure22(rnn):
+    square = torch.tensor([[-1,-1], [-1,1], [1,1], [1,-1]]).float().view(1,4,2)
+    n_linear, r_linear, z_linear = disassemble_gru(rnn, layer='_l0')
+    gcell, mstates, hstates, gates = generate_gru_states(n_linear, r_linear, z_linear, square)
+    # gcell(hstates[-1])
+    titles = [
+        r'$hidden\ state\ (h)$',
+        r'$transformed\ state\ (t_h)$',
+        r'$reset\ gate\ (r*t_h)$' + '\n' + r'$r=$',
+        r'$adding\ t_x$' + '\n' + r'$r*t_h+t_x$',
+        r'$activated\ state$' + '\n' + r'$n=tanh(r*t_h+t_x)$',
+        r'$update\ gate\ (n*(1-z))$' + '\n' + r'$1-z=$',
+        r'$adding \ z*h$' + '\n' + r'h=$(1-z)*n+z*h$', 
+    ]
+    return feature_spaces(gcell, mstates, hstates, gates, titles, bounded=['activation', 'zmult', 'addh'])
