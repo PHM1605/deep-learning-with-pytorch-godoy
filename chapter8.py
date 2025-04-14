@@ -137,34 +137,34 @@ test_loader = DataLoader(
     test_data, batch_size=16
 )
 
-# # Square model
-# class SquareModel(nn.Module):
-#     def __init__(self, n_features, hidden_dim, n_outputs):
-#         super(SquareModel, self).__init__()
-#         self.hidden_dim = hidden_dim
-#         self.n_features = n_features 
-#         self.n_outputs = n_outputs 
-#         self.hidden = None 
-#         self.basic_rnn = nn.RNN(self.n_features, self.hidden_dim, batch_first=True)
-#         self.classifier = nn.Linear(self.hidden_dim, self.n_outputs)
-#     def forward(self, X):
-#         # X: [N, L, F]
-#         # output: [N, L, H]
-#         # final hidden state: [1, N, H]
-#         batch_first_output, self.hidden = self.basic_rnn(X)
-#         last_output = batch_first_output[:, -1] # [N,1,H]
-#         out = self.classifier(last_output) # [N,1,n_outputs]
-#         return out.view(-1, self.n_outputs)
+# Square model
+class SquareModel(nn.Module):
+    def __init__(self, n_features, hidden_dim, n_outputs):
+        super(SquareModel, self).__init__()
+        self.hidden_dim = hidden_dim
+        self.n_features = n_features 
+        self.n_outputs = n_outputs 
+        self.hidden = None 
+        self.basic_rnn = nn.RNN(self.n_features, self.hidden_dim, batch_first=True)
+        self.classifier = nn.Linear(self.hidden_dim, self.n_outputs)
+    def forward(self, X):
+        # X: [N, L, F]
+        # output: [N, L, H]
+        # final hidden state: [1, N, H]
+        batch_first_output, self.hidden = self.basic_rnn(X)
+        last_output = batch_first_output[:, -1] # [N,1,H]
+        out = self.classifier(last_output) # [N,1,n_outputs]
+        return out.view(-1, self.n_outputs)
 
-# torch.manual_seed(21)
-# model = SquareModel(n_features=2, hidden_dim=2, n_outputs=1)
-# loss = nn.BCEWithLogitsLoss()
-# optimizer= optim.Adam(model.parameters(), lr=0.01)
-# sbs_rnn = StepByStep(model, loss, optimizer)
-# sbs_rnn.set_loaders(train_loader, test_loader)
-# sbs_rnn.train(100)
-# fig = sbs_rnn.plot_losses()
-# print("Recall on test dataset: ", StepByStep.loader_apply(test_loader, sbs_rnn.correct)) # 99%
+torch.manual_seed(21)
+model = SquareModel(n_features=2, hidden_dim=2, n_outputs=1)
+loss = nn.BCEWithLogitsLoss()
+optimizer= optim.Adam(model.parameters(), lr=0.01)
+sbs_rnn = StepByStep(model, loss, optimizer)
+sbs_rnn.set_loaders(train_loader, test_loader)
+sbs_rnn.train(100)
+fig = sbs_rnn.plot_losses()
+print("Recall on test dataset: ", StepByStep.loader_apply(test_loader, sbs_rnn.correct)) # 99%
 
 # ## Visualizing the model
 # # Transformed input of 4 basic corners
@@ -200,13 +200,13 @@ test_loader = DataLoader(
 # Whr, Whz, Whn = Wh.split(hidden_dim, dim=0) # each [2,2]
 # bhr, bhz, bhn = bh.split(hidden_dim, dim=0) # each [2]
 
-# def linear_layers(Wx, bx, Wh, bh):
-#     hidden_dim, n_features = Wx.size()
-#     lin_input = nn.Linear(n_features, hidden_dim)
-#     lin_input.load_state_dict({'weight':Wx, 'bias':bx})
-#     lin_hidden = nn.Linear(hidden_dim, hidden_dim)
-#     lin_hidden.load_state_dict({'weight':Wh, 'bias':bh})
-#     return lin_hidden, lin_input 
+def linear_layers(Wx, bx, Wh, bh):
+    hidden_dim, n_features = Wx.size()
+    lin_input = nn.Linear(n_features, hidden_dim)
+    lin_input.load_state_dict({'weight':Wx, 'bias':bx})
+    lin_hidden = nn.Linear(hidden_dim, hidden_dim)
+    lin_hidden.load_state_dict({'weight':Wh, 'bias':bh})
+    return lin_hidden, lin_input 
 
 # # reset gate layers - red
 # r_hidden, r_input = linear_layers(Wxr, bxr, Whr, bhr)
@@ -246,33 +246,33 @@ test_loader = DataLoader(
 # print('h_prime: ', h_prime)
 # print('Comparing with built-in lib: ', gru_cell(first_corner))
 
-# class SquareModelGRU(nn.Module):
-#     def __init__(self, n_features, hidden_dim, n_outputs):
-#         super(SquareModelGRU, self).__init__()
-#         self.hidden_dim = hidden_dim 
-#         self.n_features = n_features 
-#         self.n_outputs = n_outputs 
-#         self.hidden = None
-#         self.basic_rnn = nn.GRU(self.n_features, self.hidden_dim, batch_first=True)
-#         self.classifier = nn.Linear(self.hidden_dim, self.n_outputs)
+class SquareModelGRU(nn.Module):
+    def __init__(self, n_features, hidden_dim, n_outputs):
+        super(SquareModelGRU, self).__init__()
+        self.hidden_dim = hidden_dim 
+        self.n_features = n_features 
+        self.n_outputs = n_outputs 
+        self.hidden = None
+        self.basic_rnn = nn.GRU(self.n_features, self.hidden_dim, batch_first=True)
+        self.classifier = nn.Linear(self.hidden_dim, self.n_outputs)
     
-#     def forward(self, X):
-#         # X is batch-first: [N,L,F]; output is batch-first: [N,L,H]
-#         # final hidden state is batch-second: [1,N,H]
-#         batch_first_output, self.hidden = self.basic_rnn(X)
-#         last_output = batch_first_output[:,-1] # [N,1,H]
-#         out = self.classifier(last_output)
-#         return out.view(-1, self.n_outputs) # [N,n_outputs]
+    def forward(self, X):
+        # X is batch-first: [N,L,F]; output is batch-first: [N,L,H]
+        # final hidden state is batch-second: [1,N,H]
+        batch_first_output, self.hidden = self.basic_rnn(X)
+        last_output = batch_first_output[:,-1] # [N,1,H]
+        out = self.classifier(last_output)
+        return out.view(-1, self.n_outputs) # [N,n_outputs]
 
-# torch.manual_seed(21)
-# model = SquareModelGRU(n_features=2, hidden_dim=2, n_outputs=1)
-# loss = nn.BCEWithLogitsLoss()
-# optimizer = optim.Adam(model.parameters(), lr=0.01)
-# sbs_gru = StepByStep(model, loss, optimizer)
-# sbs_gru.set_loaders(train_loader, test_loader)
-# sbs_gru.train(100)
-# fig = sbs_gru.plot_losses()
-# print("Validation result: ", StepByStep.loader_apply(test_loader, sbs_gru.correct)) # recall: 100%
+torch.manual_seed(21)
+model = SquareModelGRU(n_features=2, hidden_dim=2, n_outputs=1)
+loss = nn.BCEWithLogitsLoss()
+optimizer = optim.Adam(model.parameters(), lr=0.01)
+sbs_gru = StepByStep(model, loss, optimizer)
+sbs_gru.set_loaders(train_loader, test_loader)
+sbs_gru.train(100)
+fig = sbs_gru.plot_losses()
+print("Validation result: ", StepByStep.loader_apply(test_loader, sbs_gru.correct)) # recall: 100%
 
 # ## Visualizing the model
 # # hidden states of RNN and GRU for 1 clockwise and 1 counter-clockwise sequence 
@@ -295,4 +295,124 @@ torch.manual_seed(17)
 lstm_cell = nn.LSTMCell(input_size=n_features, hidden_size=hidden_dim)
 lstm_state = lstm_cell.state_dict()
 print("LSTM state: ", lstm_state) # weight_ih:[8,2], weight_hh:[8,2], bias_ih:[8], bias_hh:[8]
+Wx, bx = lstm_state['weight_ih'], lstm_state['bias_ih']
+Wh, bh = lstm_state['weight_hh'], lstm_state['bias_hh']
+Wxi, Wxf, Wxg, Wxo = Wx.split(hidden_dim, dim=0)
+bxi, bxf, bxg, bxo = bx.split(hidden_dim, dim=0)
+Whi, Whf, Whg, Who = Wh.split(hidden_dim, dim=0)
+bhi, bhf, bhg, bho = bh.split(hidden_dim, dim=0)
 
+i_hidden, i_input = linear_layers(Wxi, bxi, Whi, bhi)
+f_hidden, f_input = linear_layers(Wxf, bxf, Whf, bhf)
+o_hidden, o_input = linear_layers(Wxo, bxo, Who, bho)
+
+g_cell = nn.RNNCell(n_features, hidden_dim)
+g_cell.load_state_dict({
+    'weight_ih': Wxg, 'bias_ih': bxg,
+    'weight_hh': Whg, 'bias_hh': bhg
+})
+
+def forget_gate(h, x):
+    thf = f_hidden(h)
+    txf = f_input(x)
+    f = torch.sigmoid(thf + txf)
+    return f 
+
+def output_gate(h, x):
+    tho = o_hidden(h)
+    txo = o_input(x)
+    o = torch.sigmoid(tho + txo)
+    return o 
+
+def input_gate(h, x):
+    thi = i_hidden(h)
+    txi = i_input(x)
+    i = torch.sigmoid(thi + txi)
+    return i 
+
+initial_hidden = torch.zeros(1, hidden_dim)
+initial_cell = torch.zeros(1, hidden_dim)
+X = torch.as_tensor(points[0]).float() # [4,2]
+first_corner = X[0:1] # [1,2]
+g = g_cell(first_corner) #
+i = input_gate(initial_hidden, first_corner)
+gated_input = g * i # [1,2]
+f = forget_gate(initial_hidden, first_corner)
+gated_cell = initial_cell * f # [[0,0]]
+c_prime = gated_cell + gated_input 
+o = output_gate(initial_hidden, first_corner)
+h_prime = o * torch.tanh(c_prime)
+print("LSTM cell returning state: ", h_prime, c_prime)
+print("Comparing with built-in library LSTM: ", lstm_cell(first_corner))
+
+class SquareModelLSTM(nn.Module):
+    def __init__(self, n_features, hidden_dim, n_outputs):
+        super(SquareModelLSTM, self).__init__()
+        self.hidden_dim = hidden_dim
+        self.n_features = n_features 
+        self.n_outputs = n_outputs 
+
+        self.hidden = None # final hidden state
+        self.cell = None # final cell state 
+        self.basic_rnn = nn.LSTM(self.n_features, self.hidden_dim, batch_first=True)
+        self.classifier = nn.Linear(self.hidden_dim, self.n_outputs)
+    
+    def forward(self, X):
+        # X: [N,L,F]; batch_first_output: [N,L,H]; final hidden state: [1,N,H], final cell state:[1,N,H]
+        batch_first_output, (self.hidden, self.cell) = self.basic_rnn(X)
+        last_output = batch_first_output[:,-1] # [N,1,H]
+        out = self.classifier(last_output) # [N,1,n_outputs]
+        return out.view(-1, self.n_outputs)
+
+torch.manual_seed(21)
+model = SquareModelLSTM(n_features=2, hidden_dim=2, n_outputs=1)
+loss = nn.BCEWithLogitsLoss()
+optimizer = optim.Adam(model.parameters(), lr=0.01)
+sbs_lstm = StepByStep(model, loss, optimizer)
+sbs_lstm.set_loaders(train_loader, test_loader)
+sbs_lstm.train(100)
+fig = sbs_lstm.plot_losses()
+print("Square LSTM model validation result: ", StepByStep.loader_apply(test_loader, sbs_lstm.correct))
+
+# Visualizing the hidden state
+# for 1 clockwise and 1 counter-clockwise sequence
+fig = figure25(sbs_rnn.model, sbs_gru.model, sbs_lstm.model)
+plt.savefig('test.png')
+# for all sequences 
+fig = hidden_states_contour(model, points, directions)
+plt.savefig('test.png')
+
+## Variable length sequences
+s0 = points[0] # 4 data points
+s1 = points[1][2:] # 2 data points 
+s2 = points[2][1:] # 3 data points 
+all_seqs = [s0, s1, s2]
+
+# Zero padding to ensure all have same size
+seq_tensors = [torch.as_tensor(seq).float() for seq in all_seqs]
+padded = rnn_utils.pad_sequence(seq_tensors, batch_first=True)
+
+torch.manual_seed(11)
+rnn = nn.RNN(2, 2, batch_first=True)
+output_padded, hidden_padded = rnn(padded) # [3,4,2], [1,3,2] (3 sequences, 4 corners, dimension of 2 for each corner)
+print("Output of padded input: ", output_padded)
+print("Final hidden of padded input: ", hidden_padded.permute(1,0,2)) # to convert to [3,1,2]
+
+# Packing instead of zero-padding
+# enfore_sorted: requiring seq_tensors to be sorted or not (in terms of sequence length)
+packed = rnn_utils.pack_sequence(seq_tensors, enforce_sorted=False)
+# data: [9,2]=>pack the first words of each sequence together, then pack the second words etc.
+# unsorted_indices: ([0,2,1])=>which sequences is the longest -> second longest -> etc. 
+# batch_sizes: ([3,3,2,1])=>3 sequences have >=1 word, 3 sequences have >=2 words, 2 squences have >=3 words, 1 sequence has >=4 words
+print("Packed sequence: ", packed) 
+print("Picking first sequence out: ", (packed.data[[0,3,6,8]] == seq_tensors[0]).all())
+output_packed, hidden_packed = rnn(packed)
+print("Output of packed sequence: ", output_packed) # PackedSequence; data:[9,2], unsorted_indices:([0,2,1]), batch_sizes:([3,3,2,1])
+print("Final hidden state of packed sequence: ", hidden_packed) # [1,3,2]
+# Notice: we cannot simply permute to get the final hidden of each sequence, but UNPACKING
+print("Unpack the shorted sequence hidden manually: ", output_packed.data[[2,5]]) # as 2nd and 5th words are of the shortest sequence - read rule of 'data' above
+output_unpacked, seq_sizes = rnn_utils.pad_packed_sequence(output_packed, batch_first=True)
+print("Unpacked output: ", output_unpacked) # [3,4,2]; Notice: the 2nd output sequence will have last 2 hiddens of zeros because those are padded words
+print("Sequences length: ", seq_sizes) # ([4,2,3])
+seq_idx = torch.arange(seq_sizes.size(0))
+print("Final hidden states of 3 sequences: ", output_unpacked[seq_idx, seq_sizes-1]) # [3,2]

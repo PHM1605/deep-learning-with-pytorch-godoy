@@ -771,3 +771,13 @@ def figure22(rnn):
         r'$adding \ z*h$' + '\n' + r'h=$(1-z)*n+z*h$', 
     ]
     return feature_spaces(gcell, mstates, hstates, gates, titles, bounded=['activation', 'zmult', 'addh'])
+
+def figure25(model_rnn, model_gru, model_lstm):
+    fig = plt.figure(figsize=(16, 5))
+    gs = fig.add_gridspec(1, 16)
+    titles = ['RNN', 'GRU', 'LSTM']
+    models = [model_rnn, model_gru, model_lstm]
+    for i in range(3):
+        ax = fig.add_subplot(gs[0, (i*5):((i+1)*5+(i==2))])
+        fig = canonical_contour(models[i], ax=ax, supertitle=f'{titles[i]}\n', cbar=i==2)
+    return fig 
