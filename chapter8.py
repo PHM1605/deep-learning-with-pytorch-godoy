@@ -137,34 +137,34 @@ test_loader = DataLoader(
     test_data, batch_size=16
 )
 
-# Square model
-class SquareModel(nn.Module):
-    def __init__(self, n_features, hidden_dim, n_outputs):
-        super(SquareModel, self).__init__()
-        self.hidden_dim = hidden_dim
-        self.n_features = n_features 
-        self.n_outputs = n_outputs 
-        self.hidden = None 
-        self.basic_rnn = nn.RNN(self.n_features, self.hidden_dim, batch_first=True)
-        self.classifier = nn.Linear(self.hidden_dim, self.n_outputs)
-    def forward(self, X):
-        # X: [N, L, F]
-        # output: [N, L, H]
-        # final hidden state: [1, N, H]
-        batch_first_output, self.hidden = self.basic_rnn(X)
-        last_output = batch_first_output[:, -1] # [N,1,H]
-        out = self.classifier(last_output) # [N,1,n_outputs]
-        return out.view(-1, self.n_outputs)
+# # Square model
+# class SquareModel(nn.Module):
+#     def __init__(self, n_features, hidden_dim, n_outputs):
+#         super(SquareModel, self).__init__()
+#         self.hidden_dim = hidden_dim
+#         self.n_features = n_features 
+#         self.n_outputs = n_outputs 
+#         self.hidden = None 
+#         self.basic_rnn = nn.RNN(self.n_features, self.hidden_dim, batch_first=True)
+#         self.classifier = nn.Linear(self.hidden_dim, self.n_outputs)
+#     def forward(self, X):
+#         # X: [N, L, F]
+#         # output: [N, L, H]
+#         # final hidden state: [1, N, H]
+#         batch_first_output, self.hidden = self.basic_rnn(X)
+#         last_output = batch_first_output[:, -1] # [N,1,H]
+#         out = self.classifier(last_output) # [N,1,n_outputs]
+#         return out.view(-1, self.n_outputs)
 
-torch.manual_seed(21)
-model = SquareModel(n_features=2, hidden_dim=2, n_outputs=1)
-loss = nn.BCEWithLogitsLoss()
-optimizer= optim.Adam(model.parameters(), lr=0.01)
-sbs_rnn = StepByStep(model, loss, optimizer)
-sbs_rnn.set_loaders(train_loader, test_loader)
-sbs_rnn.train(100)
-fig = sbs_rnn.plot_losses()
-print("Recall on test dataset: ", StepByStep.loader_apply(test_loader, sbs_rnn.correct)) # 99%
+# torch.manual_seed(21)
+# model = SquareModel(n_features=2, hidden_dim=2, n_outputs=1)
+# loss = nn.BCEWithLogitsLoss()
+# optimizer= optim.Adam(model.parameters(), lr=0.01)
+# sbs_rnn = StepByStep(model, loss, optimizer)
+# sbs_rnn.set_loaders(train_loader, test_loader)
+# sbs_rnn.train(100)
+# fig = sbs_rnn.plot_losses()
+# print("Recall on test dataset: ", StepByStep.loader_apply(test_loader, sbs_rnn.correct)) # 99%
 
 # ## Visualizing the model
 # # Transformed input of 4 basic corners
@@ -246,33 +246,33 @@ def linear_layers(Wx, bx, Wh, bh):
 # print('h_prime: ', h_prime)
 # print('Comparing with built-in lib: ', gru_cell(first_corner))
 
-class SquareModelGRU(nn.Module):
-    def __init__(self, n_features, hidden_dim, n_outputs):
-        super(SquareModelGRU, self).__init__()
-        self.hidden_dim = hidden_dim 
-        self.n_features = n_features 
-        self.n_outputs = n_outputs 
-        self.hidden = None
-        self.basic_rnn = nn.GRU(self.n_features, self.hidden_dim, batch_first=True)
-        self.classifier = nn.Linear(self.hidden_dim, self.n_outputs)
+# class SquareModelGRU(nn.Module):
+#     def __init__(self, n_features, hidden_dim, n_outputs):
+#         super(SquareModelGRU, self).__init__()
+#         self.hidden_dim = hidden_dim 
+#         self.n_features = n_features 
+#         self.n_outputs = n_outputs 
+#         self.hidden = None
+#         self.basic_rnn = nn.GRU(self.n_features, self.hidden_dim, batch_first=True)
+#         self.classifier = nn.Linear(self.hidden_dim, self.n_outputs)
     
-    def forward(self, X):
-        # X is batch-first: [N,L,F]; output is batch-first: [N,L,H]
-        # final hidden state is batch-second: [1,N,H]
-        batch_first_output, self.hidden = self.basic_rnn(X)
-        last_output = batch_first_output[:,-1] # [N,1,H]
-        out = self.classifier(last_output)
-        return out.view(-1, self.n_outputs) # [N,n_outputs]
+#     def forward(self, X):
+#         # X is batch-first: [N,L,F]; output is batch-first: [N,L,H]
+#         # final hidden state is batch-second: [1,N,H]
+#         batch_first_output, self.hidden = self.basic_rnn(X)
+#         last_output = batch_first_output[:,-1] # [N,1,H]
+#         out = self.classifier(last_output)
+#         return out.view(-1, self.n_outputs) # [N,n_outputs]
 
-torch.manual_seed(21)
-model = SquareModelGRU(n_features=2, hidden_dim=2, n_outputs=1)
-loss = nn.BCEWithLogitsLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.01)
-sbs_gru = StepByStep(model, loss, optimizer)
-sbs_gru.set_loaders(train_loader, test_loader)
-sbs_gru.train(100)
-fig = sbs_gru.plot_losses()
-print("Validation result: ", StepByStep.loader_apply(test_loader, sbs_gru.correct)) # recall: 100%
+# torch.manual_seed(21)
+# model = SquareModelGRU(n_features=2, hidden_dim=2, n_outputs=1)
+# loss = nn.BCEWithLogitsLoss()
+# optimizer = optim.Adam(model.parameters(), lr=0.01)
+# sbs_gru = StepByStep(model, loss, optimizer)
+# sbs_gru.set_loaders(train_loader, test_loader)
+# sbs_gru.train(100)
+# fig = sbs_gru.plot_losses()
+# print("Validation result: ", StepByStep.loader_apply(test_loader, sbs_gru.correct)) # recall: 100%
 
 # ## Visualizing the model
 # # hidden states of RNN and GRU for 1 clockwise and 1 counter-clockwise sequence 
@@ -364,23 +364,23 @@ class SquareModelLSTM(nn.Module):
         out = self.classifier(last_output) # [N,1,n_outputs]
         return out.view(-1, self.n_outputs)
 
-torch.manual_seed(21)
-model = SquareModelLSTM(n_features=2, hidden_dim=2, n_outputs=1)
-loss = nn.BCEWithLogitsLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.01)
-sbs_lstm = StepByStep(model, loss, optimizer)
-sbs_lstm.set_loaders(train_loader, test_loader)
-sbs_lstm.train(100)
-fig = sbs_lstm.plot_losses()
-print("Square LSTM model validation result: ", StepByStep.loader_apply(test_loader, sbs_lstm.correct))
+# torch.manual_seed(21)
+# model = SquareModelLSTM(n_features=2, hidden_dim=2, n_outputs=1)
+# loss = nn.BCEWithLogitsLoss()
+# optimizer = optim.Adam(model.parameters(), lr=0.01)
+# sbs_lstm = StepByStep(model, loss, optimizer)
+# sbs_lstm.set_loaders(train_loader, test_loader)
+# sbs_lstm.train(100)
+# fig = sbs_lstm.plot_losses()
+# print("Square LSTM model validation result: ", StepByStep.loader_apply(test_loader, sbs_lstm.correct))
 
-# Visualizing the hidden state
-# for 1 clockwise and 1 counter-clockwise sequence
-fig = figure25(sbs_rnn.model, sbs_gru.model, sbs_lstm.model)
-plt.savefig('test.png')
-# for all sequences 
-fig = hidden_states_contour(model, points, directions)
-plt.savefig('test.png')
+# # Visualizing the hidden state
+# # for 1 clockwise and 1 counter-clockwise sequence
+# fig = figure25(sbs_rnn.model, sbs_gru.model, sbs_lstm.model)
+# plt.savefig('test.png')
+# # for all sequences 
+# fig = hidden_states_contour(model, points, directions)
+# plt.savefig('test.png')
 
 ## Variable length sequences
 s0 = points[0] # 4 data points
@@ -416,3 +416,43 @@ print("Unpacked output: ", output_unpacked) # [3,4,2]; Notice: the 2nd output se
 print("Sequences length: ", seq_sizes) # ([4,2,3])
 seq_idx = torch.arange(seq_sizes.size(0))
 print("Final hidden states of 3 sequences: ", output_unpacked[seq_idx, seq_sizes-1]) # [3,2]
+
+# # To convert padded sequence to packed sequence
+# len_seqs = [len(seq) for seq in all_seqs]
+# packed = rnn_utils.pack_padded_sequence(
+#     padded,
+#     len_seqs,
+#     enforce_sorted = False,
+#     batch_first = True 
+# )
+# print("Packed sequence: ", packed)
+
+## Variable-length dataset 
+var_points, var_directions = generate_sequences(variable_len=True) # list of 128 elements, each with shape [2,2] or [3,2] or [4,2]
+
+class CustomDataset(Dataset):
+    def __init__(self, x, y):
+        self.x = [torch.as_tensor(s).float() for s in x]
+        self.y = torch.as_tensor(y).float().view(-1,1)
+    
+    def __getitem__(self, index):
+        return (self.x[index], self.y[index])
+    
+    def __len__(self):
+        return len(self.x)
+
+train_var_data = CustomDataset(var_points, var_directions)
+# We cannot use DataLoader directly, because each sample has a different length
+# => Solution: packing with Collate Function i.e. telling how to batch data
+def pack_collate(batch): # batch: [(x_tensor,y_tensor), (x_tensor,y_tensor), ()]
+    X = [item[0] for item in batch]
+    y = [item[1] for item in batch]
+    X_pack = rnn_utils.pack_sequence(X, enforce_sorted=False)
+    return X_pack, torch.as_tensor(y).view(-1, 1)
+# Test the pack_collate function
+dummy_batch = [train_var_data[0], train_var_data[1]] # list of 2 tuples
+dummy_x, dummy_y = pack_collate(dummy_batch)
+print("Packed sequence X and tensor y:\n", dummy_x, '\n', dummy_y)
+train_var_loader = DataLoader(train_var_data, batch_size=2, shuffle=True, collate_fn=pack_collate)
+x_batch, y_batch = next(iter(train_var_loader))
+print("Batch of variable-length sequence:\n", x_batch, '\n', y_batch)
