@@ -125,7 +125,6 @@ def counter_vs_clock(basic_corners=None, basic_colors=None, basic_letters=None, 
         axs[is_clock].set_ylabel(r'$x_1$', rotation=0)
 
     fig.tight_layout()
-    plt.savefig('test.png')
     return fig 
 
 def plot_sequences(basic_corners=None, basic_colors=None, basic_letters=None, binary=True, target_len=0):
@@ -183,7 +182,6 @@ def plot_data(points, directions, n_rows=2, n_cols=5):
         ax.set_xlim([-1.5, 1.5])
         ax.set_ylim([-1.5, 1.5])
     fig.tight_layout()
-    plt.savefig('test.png')
     return fig 
 
 def build_rnn_cell(linear_hidden, activation='tanh'):
