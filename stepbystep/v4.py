@@ -177,7 +177,6 @@ class StepByStep(object):
         plt.ylabel('Loss')
         plt.legend()
         plt.tight_layout()
-        plt.savefig('test.png')
         return fig 
     
     def add_graph(self):

@@ -18,7 +18,7 @@ from plots.chapter8 import *
 # # Possible sequences of corners and corresponding outputs
 # fig = plot_sequences()
 
-points, directions = generate_sequences(n=128, seed=13)
+# points, directions = generate_sequences(n=128, seed=13)
 # fig = plot_data(points, directions)
 
 # ## RNN Cell
@@ -120,22 +120,22 @@ points, directions = generate_sequences(n=128, seed=13)
 # print("Total output and total final hidden state (built in): ", out, hidden)
 # print("Is last output element same as final hidden state? ", out[:,-1] == hidden.permute(1,0,2).view(1,-1)) # No
 
-## Data preparation
-test_points, test_directions = generate_sequences(seed=19)
-train_data = TensorDataset(
-    torch.as_tensor(np.array(points)).float(),
-    torch.as_tensor(directions).view(-1,1).float()
-)
-test_data = TensorDataset(
-    torch.as_tensor(np.array(test_points)).float(),
-    torch.as_tensor(test_directions).view(-1,1).float()
-)
-train_loader = DataLoader(
-    train_data, batch_size=16, shuffle=True
-)
-test_loader = DataLoader(
-    test_data, batch_size=16
-)
+# ## Data preparation
+# test_points, test_directions = generate_sequences(seed=19)
+# train_data = TensorDataset(
+#     torch.as_tensor(np.array(points)).float(),
+#     torch.as_tensor(directions).view(-1,1).float()
+# )
+# test_data = TensorDataset(
+#     torch.as_tensor(np.array(test_points)).float(),
+#     torch.as_tensor(test_directions).view(-1,1).float()
+# )
+# train_loader = DataLoader(
+#     train_data, batch_size=16, shuffle=True
+# )
+# test_loader = DataLoader(
+#     test_data, batch_size=16
+# )
 
 # # Square model
 # class SquareModel(nn.Module):
@@ -284,33 +284,33 @@ def linear_layers(Wx, bx, Wh, bh):
 # # hidden state over every operation performed inside the GRU (for 1 sequence of 4 corners)
 # fig = figure22(model.basic_rnn)
 
-## LSTM 
-# candidate hidden state (short-term memory): g = tanh(thg + txg)
-# new cell state (long-term-memory): c' = i*g + f*c; with i=input gate, f=forget gate; c=old cell state, g=candidate hidden state
-# new hidden state: h' = o*tanh(c'); with o=output gate
-# all gates have the form: i=sigmoid(thi+txi) with th = W*h+bias, tx=W*x+bias
-n_features = 2
-hidden_dim = 2
-torch.manual_seed(17)
-lstm_cell = nn.LSTMCell(input_size=n_features, hidden_size=hidden_dim)
-lstm_state = lstm_cell.state_dict()
-print("LSTM state: ", lstm_state) # weight_ih:[8,2], weight_hh:[8,2], bias_ih:[8], bias_hh:[8]
-Wx, bx = lstm_state['weight_ih'], lstm_state['bias_ih']
-Wh, bh = lstm_state['weight_hh'], lstm_state['bias_hh']
-Wxi, Wxf, Wxg, Wxo = Wx.split(hidden_dim, dim=0)
-bxi, bxf, bxg, bxo = bx.split(hidden_dim, dim=0)
-Whi, Whf, Whg, Who = Wh.split(hidden_dim, dim=0)
-bhi, bhf, bhg, bho = bh.split(hidden_dim, dim=0)
+# ## LSTM 
+# # candidate hidden state (short-term memory): g = tanh(thg + txg)
+# # new cell state (long-term-memory): c' = i*g + f*c; with i=input gate, f=forget gate; c=old cell state, g=candidate hidden state
+# # new hidden state: h' = o*tanh(c'); with o=output gate
+# # all gates have the form: i=sigmoid(thi+txi) with th = W*h+bias, tx=W*x+bias
+# n_features = 2
+# hidden_dim = 2
+# torch.manual_seed(17)
+# lstm_cell = nn.LSTMCell(input_size=n_features, hidden_size=hidden_dim)
+# lstm_state = lstm_cell.state_dict()
+# print("LSTM state: ", lstm_state) # weight_ih:[8,2], weight_hh:[8,2], bias_ih:[8], bias_hh:[8]
+# Wx, bx = lstm_state['weight_ih'], lstm_state['bias_ih']
+# Wh, bh = lstm_state['weight_hh'], lstm_state['bias_hh']
+# Wxi, Wxf, Wxg, Wxo = Wx.split(hidden_dim, dim=0)
+# bxi, bxf, bxg, bxo = bx.split(hidden_dim, dim=0)
+# Whi, Whf, Whg, Who = Wh.split(hidden_dim, dim=0)
+# bhi, bhf, bhg, bho = bh.split(hidden_dim, dim=0)
 
-i_hidden, i_input = linear_layers(Wxi, bxi, Whi, bhi)
-f_hidden, f_input = linear_layers(Wxf, bxf, Whf, bhf)
-o_hidden, o_input = linear_layers(Wxo, bxo, Who, bho)
+# i_hidden, i_input = linear_layers(Wxi, bxi, Whi, bhi)
+# f_hidden, f_input = linear_layers(Wxf, bxf, Whf, bhf)
+# o_hidden, o_input = linear_layers(Wxo, bxo, Who, bho)
 
-g_cell = nn.RNNCell(n_features, hidden_dim)
-g_cell.load_state_dict({
-    'weight_ih': Wxg, 'bias_ih': bxg,
-    'weight_hh': Whg, 'bias_hh': bhg
-})
+# g_cell = nn.RNNCell(n_features, hidden_dim)
+# g_cell.load_state_dict({
+#     'weight_ih': Wxg, 'bias_ih': bxg,
+#     'weight_hh': Whg, 'bias_hh': bhg
+# })
 
 def forget_gate(h, x):
     thf = f_hidden(h)
@@ -330,20 +330,20 @@ def input_gate(h, x):
     i = torch.sigmoid(thi + txi)
     return i 
 
-initial_hidden = torch.zeros(1, hidden_dim)
-initial_cell = torch.zeros(1, hidden_dim)
-X = torch.as_tensor(points[0]).float() # [4,2]
-first_corner = X[0:1] # [1,2]
-g = g_cell(first_corner) #
-i = input_gate(initial_hidden, first_corner)
-gated_input = g * i # [1,2]
-f = forget_gate(initial_hidden, first_corner)
-gated_cell = initial_cell * f # [[0,0]]
-c_prime = gated_cell + gated_input 
-o = output_gate(initial_hidden, first_corner)
-h_prime = o * torch.tanh(c_prime)
-print("LSTM cell returning state: ", h_prime, c_prime)
-print("Comparing with built-in library LSTM: ", lstm_cell(first_corner))
+# initial_hidden = torch.zeros(1, hidden_dim)
+# initial_cell = torch.zeros(1, hidden_dim)
+# X = torch.as_tensor(points[0]).float() # [4,2]
+# first_corner = X[0:1] # [1,2]
+# g = g_cell(first_corner) #
+# i = input_gate(initial_hidden, first_corner)
+# gated_input = g * i # [1,2]
+# f = forget_gate(initial_hidden, first_corner)
+# gated_cell = initial_cell * f # [[0,0]]
+# c_prime = gated_cell + gated_input 
+# o = output_gate(initial_hidden, first_corner)
+# h_prime = o * torch.tanh(c_prime)
+# print("LSTM cell returning state: ", h_prime, c_prime)
+# print("Comparing with built-in library LSTM: ", lstm_cell(first_corner))
 
 class SquareModelLSTM(nn.Module):
     def __init__(self, n_features, hidden_dim, n_outputs):
@@ -382,40 +382,40 @@ class SquareModelLSTM(nn.Module):
 # fig = hidden_states_contour(model, points, directions)
 # plt.savefig('test.png')
 
-## Variable length sequences
-s0 = points[0] # 4 data points
-s1 = points[1][2:] # 2 data points 
-s2 = points[2][1:] # 3 data points 
-all_seqs = [s0, s1, s2]
+# ## Variable length sequences
+# s0 = points[0] # 4 data points
+# s1 = points[1][2:] # 2 data points 
+# s2 = points[2][1:] # 3 data points 
+# all_seqs = [s0, s1, s2]
 
-# Zero padding to ensure all have same size
-seq_tensors = [torch.as_tensor(seq).float() for seq in all_seqs]
-padded = rnn_utils.pad_sequence(seq_tensors, batch_first=True)
+# # Zero padding to ensure all have same size
+# seq_tensors = [torch.as_tensor(seq).float() for seq in all_seqs]
+# padded = rnn_utils.pad_sequence(seq_tensors, batch_first=True)
 
-torch.manual_seed(11)
-rnn = nn.RNN(2, 2, batch_first=True)
-output_padded, hidden_padded = rnn(padded) # [3,4,2], [1,3,2] (3 sequences, 4 corners, dimension of 2 for each corner)
-print("Output of padded input: ", output_padded)
-print("Final hidden of padded input: ", hidden_padded.permute(1,0,2)) # to convert to [3,1,2]
+# torch.manual_seed(11)
+# rnn = nn.RNN(2, 2, batch_first=True)
+# output_padded, hidden_padded = rnn(padded) # [3,4,2], [1,3,2] (3 sequences, 4 corners, dimension of 2 for each corner)
+# print("Output of padded input: ", output_padded)
+# print("Final hidden of padded input: ", hidden_padded.permute(1,0,2)) # to convert to [3,1,2]
 
-# Packing instead of zero-padding
-# enfore_sorted: requiring seq_tensors to be sorted or not (in terms of sequence length)
-packed = rnn_utils.pack_sequence(seq_tensors, enforce_sorted=False)
-# data: [9,2]=>pack the first words of each sequence together, then pack the second words etc.
-# unsorted_indices: ([0,2,1])=>which sequences is the longest -> second longest -> etc. 
-# batch_sizes: ([3,3,2,1])=>3 sequences have >=1 word, 3 sequences have >=2 words, 2 squences have >=3 words, 1 sequence has >=4 words
-print("Packed sequence: ", packed) 
-print("Picking first sequence out: ", (packed.data[[0,3,6,8]] == seq_tensors[0]).all())
-output_packed, hidden_packed = rnn(packed)
-print("Output of packed sequence: ", output_packed) # PackedSequence; data:[9,2], unsorted_indices:([0,2,1]), batch_sizes:([3,3,2,1])
-print("Final hidden state of packed sequence: ", hidden_packed) # [1,3,2]
-# Notice: we cannot simply permute to get the final hidden of each sequence, but UNPACKING
-print("Unpack the shorted sequence hidden manually: ", output_packed.data[[2,5]]) # as 2nd and 5th words are of the shortest sequence - read rule of 'data' above
-output_unpacked, seq_sizes = rnn_utils.pad_packed_sequence(output_packed, batch_first=True)
-print("Unpacked output: ", output_unpacked) # [3,4,2]; Notice: the 2nd output sequence will have last 2 hiddens of zeros because those are padded words
-print("Sequences length: ", seq_sizes) # ([4,2,3])
-seq_idx = torch.arange(seq_sizes.size(0))
-print("Final hidden states of 3 sequences: ", output_unpacked[seq_idx, seq_sizes-1]) # [3,2]
+# # Packing instead of zero-padding
+# # enfore_sorted: requiring seq_tensors to be sorted or not (in terms of sequence length)
+# packed = rnn_utils.pack_sequence(seq_tensors, enforce_sorted=False)
+# # data: [9,2]=>pack the first words of each sequence together, then pack the second words etc.
+# # unsorted_indices: ([0,2,1])=>which sequences is the longest -> second longest -> etc. 
+# # batch_sizes: ([3,3,2,1])=>3 sequences have >=1 word, 3 sequences have >=2 words, 2 squences have >=3 words, 1 sequence has >=4 words
+# print("Packed sequence: ", packed) 
+# print("Picking first sequence out: ", (packed.data[[0,3,6,8]] == seq_tensors[0]).all())
+# output_packed, hidden_packed = rnn(packed)
+# print("Output of packed sequence: ", output_packed) # PackedSequence; data:[9,2], unsorted_indices:([0,2,1]), batch_sizes:([3,3,2,1])
+# print("Final hidden state of packed sequence: ", hidden_packed) # [1,3,2]
+# # Notice: we cannot simply permute to get the final hidden of each sequence, but UNPACKING
+# print("Unpack the shorted sequence hidden manually: ", output_packed.data[[2,5]]) # as 2nd and 5th words are of the shortest sequence - read rule of 'data' above
+# output_unpacked, seq_sizes = rnn_utils.pad_packed_sequence(output_packed, batch_first=True)
+# print("Unpacked output: ", output_unpacked) # [3,4,2]; Notice: the 2nd output sequence will have last 2 hiddens of zeros because those are padded words
+# print("Sequences length: ", seq_sizes) # ([4,2,3])
+# seq_idx = torch.arange(seq_sizes.size(0))
+# print("Final hidden states of 3 sequences: ", output_unpacked[seq_idx, seq_sizes-1]) # [3,2]
 
 # # To convert padded sequence to packed sequence
 # len_seqs = [len(seq) for seq in all_seqs]
@@ -427,8 +427,8 @@ print("Final hidden states of 3 sequences: ", output_unpacked[seq_idx, seq_sizes
 # )
 # print("Packed sequence: ", packed)
 
-## Variable-length dataset 
-var_points, var_directions = generate_sequences(variable_len=True) # list of 128 elements, each with shape [2,2] or [3,2] or [4,2]
+# ## Variable-length dataset 
+# var_points, var_directions = generate_sequences(variable_len=True) # list of 128 elements, each with shape [2,2] or [3,2] or [4,2]
 
 class CustomDataset(Dataset):
     def __init__(self, x, y):
@@ -441,18 +441,177 @@ class CustomDataset(Dataset):
     def __len__(self):
         return len(self.x)
 
+# # train_var_data = CustomDataset(var_points, var_directions)
+# # We cannot use DataLoader directly, because each sample has a different length
+# # => Solution: packing with Collate Function i.e. telling how to batch data
+# def pack_collate(batch): # batch: [(x_tensor,y_tensor), (x_tensor,y_tensor), ()]
+#     X = [item[0] for item in batch]
+#     y = [item[1] for item in batch]
+#     X_pack = rnn_utils.pack_sequence(X, enforce_sorted=False)
+#     return X_pack, torch.as_tensor(y).view(-1, 1)
+# # Test the pack_collate function
+# dummy_batch = [train_var_data[0], train_var_data[1]] # list of 2 tuples
+# dummy_x, dummy_y = pack_collate(dummy_batch)
+# print("Packed sequence X and tensor y:\n", dummy_x, '\n', dummy_y)
+# train_var_loader = DataLoader(train_var_data, batch_size=2, shuffle=True, collate_fn=pack_collate)
+# x_batch, y_batch = next(iter(train_var_loader))
+# print("Batch of variable-length sequence:\n", x_batch, '\n', y_batch)
+
+# class SquareModelPacked(nn.Module):
+#     def __init__(self, n_features, hidden_dim, n_outputs):
+#         super(SquareModelPacked, self).__init__()
+#         self.hidden_dim = hidden_dim
+#         self.n_features = n_features
+#         self.n_outputs = n_outputs
+#         self.hidden = None 
+#         self.cell = None 
+#         self.basic_rnn = nn.LSTM(self.n_features, self.hidden_dim, bidirectional=True) # bidirectional LSTM
+#         self.classifier = nn.Linear(2*self.hidden_dim, self.n_outputs)
+
+#     # X: packed sequence
+#     # final hidden state and final cell state: [2,N,H] (bidirectional LSTM)
+#     def forward(self, X):
+#         rnn_out, (self.hidden, self.cell) = self.basic_rnn(X)
+#         # unpack padded output: [N,L,2*H]
+#         batch_first_output, seq_sizes = rnn_utils.pad_packed_sequence(rnn_out, batch_first=True)
+#         seq_idx = torch.arange(seq_sizes.size(0)) # [0,1]
+#         last_output = batch_first_output[seq_idx, seq_sizes-1] # [[0,1], [3,1]]=>[2,2*H], 1st row for 1st sequence, 2nd for 2nd sequence 
+#         out = self.classifier(last_output) #  [N,1,n_outputs]
+#         return out.view(-1, self.n_outputs)
+
+# torch.manual_seed(21)
+# model = SquareModelPacked(n_features=2, hidden_dim=2, n_outputs=1)
+# loss = nn.BCEWithLogitsLoss() 
+# optimizer = optim.Adam(model.parameters(), lr=.01)
+# sbs_packed = StepByStep(model, loss, optimizer)
+# sbs_packed.set_loaders(train_var_loader)
+# sbs_packed.train(100)
+# fig = sbs_packed.plot_losses()
+# print("Validation result:\n", StepByStep.loader_apply(train_var_loader, sbs_packed.correct))
+
+# ## 1D Convolutions
+# temperatures = np.array([5, 11, 15, 6, 5, 3, 3, 0, 0, 3, 4, 2, 1])
+# size = 5 
+# weight = torch.ones(size) * 0.2
+# print("Conv1d result: ", F.conv1d( 
+#     torch.as_tensor(temperatures).float().view(1,1,-1),
+#     weight = weight.view(1,1,-1)))
+# seqs = torch.as_tensor(points).float() # [N,L,F]
+# seqs_length_last = seqs.permute(0,2,1) # [N,F,L]
+
+# torch.manual_seed(17)
+# conv_seq = nn.Conv1d(in_channels=2, out_channels=1, kernel_size=2, bias=False)
+# print("Conv1d shape: ", conv_seq.weight.shape) # [1,2,2] 
+# # NOTE: Shape of sequence [L] convolve with filter [l_i], padding p, dilation d => floor of ((l_i+2*p)-df+d-1)/s +1
+# print("Conv1d result: ", conv_seq(seqs_length_last[0:1])) # [1,1,3]
+
+# # Dilation - if dilation=2 means takes the 0th and 2nd value to multiply filter, then 1st and 3rd...
+# torch.manual_seed(17)
+# conv_dilated = nn.Conv1d(in_channels=2, out_channels=1, kernel_size=2, dilation=2, bias=False)
+# print("Dilated Conv1d shape: ", conv_dilated.weight.shape) # [1,2,2]
+# print("Dilated Conv1d result: ", conv_dilated(seqs_length_last[0:1])) # [1,1,2]
+
+# train_data = TensorDataset(
+#     torch.as_tensor(points).float().permute(0, 2, 1), # [N,L,F]=>[N,F,L]
+#     torch.as_tensor(directions).view(-1,1).float()
+# )
+# test_data = TensorDataset(
+#     torch.as_tensor(test_points).float().permute(0,2,1),
+#     torch.as_tensor(test_directions).view(-1,1).float()
+# )
+# train_loader = DataLoader(
+#     train_data, batch_size=16, shuffle=True
+# )
+# test_loader = DataLoader(
+#     test_data, batch_size=16
+# )
+
+# torch.manual_seed(21)
+# model = nn.Sequential()
+# model.add_module('conv1d', nn.Conv1d(in_channels=2, out_channels=1, kernel_size=2))
+# model.add_module('relu', nn.ReLU())
+# model.add_module('flatten', nn.Flatten())
+# model.add_module('output', nn.Linear(3,1))
+# loss = nn.BCEWithLogitsLoss()
+# optimizer = optim.Adam(model.parameters(), lr=0.01)
+# sbs_conv1 = StepByStep(model, loss, optimizer)
+# sbs_conv1.set_loaders(train_loader, test_loader)
+# sbs_conv1.train(100)
+# fig = sbs_conv1.plot_losses()
+# plt.savefig('test.png')
+# print("Model with Conv1d validation result: ", StepByStep.loader_apply(test_loader, sbs_conv1.correct))
+
+## Putting all together
+# Fixed length dataset
+points, directions = generate_sequences(n=128, seed=13)
+train_data = TensorDataset(
+    torch.as_tensor(np.array(points)).float(),
+    torch.as_tensor(directions).view(-1,1).float()
+)
+train_loader = DataLoader(
+    train_data, batch_size=16, shuffle=True 
+)
+# Variable length dataset
+var_points, var_directions = generate_sequences(variable_len=True)
+class CustomDataset(Dataset):
+    def __init__(self, x, y):
+        self.x = [torch.as_tensor(s).float() for s in x]
+        self.y = torch.as_tensor(y).float().view(-1,1)
+    def __getitem__(self, index):
+        return (self.x[index], self.y[index])
+    def __len__(self):
+        return len(self.x)
 train_var_data = CustomDataset(var_points, var_directions)
-# We cannot use DataLoader directly, because each sample has a different length
-# => Solution: packing with Collate Function i.e. telling how to batch data
-def pack_collate(batch): # batch: [(x_tensor,y_tensor), (x_tensor,y_tensor), ()]
+
+def pack_collate(batch):
     X = [item[0] for item in batch]
     y = [item[1] for item in batch]
     X_pack = rnn_utils.pack_sequence(X, enforce_sorted=False)
-    return X_pack, torch.as_tensor(y).view(-1, 1)
-# Test the pack_collate function
-dummy_batch = [train_var_data[0], train_var_data[1]] # list of 2 tuples
-dummy_x, dummy_y = pack_collate(dummy_batch)
-print("Packed sequence X and tensor y:\n", dummy_x, '\n', dummy_y)
-train_var_loader = DataLoader(train_var_data, batch_size=2, shuffle=True, collate_fn=pack_collate)
-x_batch, y_batch = next(iter(train_var_loader))
-print("Batch of variable-length sequence:\n", x_batch, '\n', y_batch)
+    return X_pack, torch.as_tensor(y).view(-1,1)
+
+train_var_loader = DataLoader(
+    train_var_data,
+    batch_size=16,
+    shuffle=True,
+    collate_fn=pack_collate 
+    )
+
+class SquareModelOne(nn.Module):
+    def __init__(self, n_features, hidden_dim, n_outputs, rnn_layer=nn.LSTM, **kwargs):
+        super(SquareModelOne, self).__init__()
+        self.hidden_dim = hidden_dim 
+        self.n_features = n_features 
+        self.n_outputs = n_outputs 
+        self.hidden = None 
+        self.cell = None 
+        self.basic_rnn = rnn_layer(self.n_features, self.hidden_dim, batch_first=True, **kwargs)
+        output_dim = (self.basic_rnn.bidirectional + 1) * self.hidden_dim 
+        self.classifier = nn.Linear(output_dim, self.n_outputs)
+
+    def forward(self, X):
+        is_packed = isinstance(X, nn.utils.rnn.PackedSequence)
+        rnn_out, self.hidden = self.basic_rnn(X)
+        if isinstance(self.basic_rnn, nn.LSTM):
+            self.hidden, self.cell = self.hidden 
+        if is_packed:
+            # unpack the output (from PackedSequence to tensor of padded sequence)
+            batch_first_output, seq_sizes = rnn_utils.pad_packed_sequence(rnn_out, batch_first=True) # [N,L,H]
+            seq_slice = torch.arange(seq_sizes.size(0)) # [0,1,2]
+        else:
+            batch_first_output = rnn_out # [N,L,H]
+            seq_sizes = 0 # so the next step will take element -1 i.e. last output
+            seq_slice = slice(None, None, None) # same as [:]
+        last_output = batch_first_output[seq_slice, seq_sizes-1] # [N,1,H]
+        out = self.classifier (last_output) # [N,1,n_outputs]
+        return out.view(-1, self.n_outputs) # [N, n_outputs]
+
+torch.manual_seed(21)
+model = SquareModelOne(n_features=2, hidden_dim=2, n_outputs=1, rnn_layer=nn.LSTM, num_layers=1, bidirectional=True)
+loss = nn.BCEWithLogitsLoss()
+optimizer = optim.Adam(model.parameters(), lr=0.01)
+sbs_one = StepByStep(model, loss, optimizer)
+# sbs_one.set_loaders(train_loader)
+sbs_one.set_loaders(train_var_loader)
+sbs_one.train(100)
+# print("Validation result of fixed-length dataset:\n", StepByStep.loader_apply(train_loader, sbs_one.correct))
+print("Validation result of variable-length dataset:\n", StepByStep.loader_apply(train_var_loader, sbs_one.correct))
