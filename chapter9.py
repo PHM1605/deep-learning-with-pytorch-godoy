@@ -34,9 +34,7 @@ class Encoder(nn.Module):
         return rnn_out # [N,L,F]
 
 # Encoding dummy sequence
-full_seq = torch.tensor([[-1,-1],[-1,1],[1,1],[1,-1]])
-    .float()
-    .view(1,4,2)
+full_seq = torch.tensor([[-1,-1],[-1,1],[1,1],[1,-1]]).float().view(1,4,2)
 source_seq = full_seq[:,:2] # [1,2,2]
 target_seq = full_seq[:,2:] # [1,2,2]
 
@@ -65,3 +63,19 @@ class Decoder(nn.Module):
         last_output = batch_first_output[:,-1:] # [N,1,F]
         out = self.regression(last_output)
         return out.view(-1,1,self.n_features) # [N,1,F]
+
+## Choosing at random between Teacher Forcing (feeding real target sequence values) OR Feeding Previous Prediction
+torch.manual_seed(21)
+decoder = Decoder(n_features=2, hidden_dim=2)
+decoder.init_hidden(hidden_seq)
+inputs = source_seq[:,-1:] # [1,1,2]
+teacher_forcing_prob = 0.5
+target_len = 2
+for i in range(target_len):
+    print(f"Hidden: {decoder.hidden}")
+    out = decoder(inputs) # [1,1,2]
+    print(f"Output: {out}\n")
+    if torch.rand(1) <= teacher_forcing_prob:
+        inputs = target_seq[:, i:i+1] # Teacher forcing (feeding real target sequence values)
+    else
+        inputs = out # Feeding previous prediction 
