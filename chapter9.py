@@ -31,7 +31,7 @@ class Encoder(nn.Module):
             batch_first=True)
     def forward(self, X):
         rnn_out, self.hidden = self.basic_rnn(X)
-        return rnn_out # [N,L,F]
+        return rnn_out # [N,L,H]
 
 # Encoding dummy sequence
 full_seq = torch.tensor([[-1,-1],[-1,1],[1,1],[1,-1]]).float().view(1,4,2)
@@ -77,5 +77,53 @@ for i in range(target_len):
     print(f"Output: {out}\n")
     if torch.rand(1) <= teacher_forcing_prob:
         inputs = target_seq[:, i:i+1] # Teacher forcing (feeding real target sequence values)
-    else
+    else:
         inputs = out # Feeding previous prediction 
+
+class EncoderDecoder(nn.Module):
+    def __init__(self, encoder, decoder, input_len, target_len, teacher_forcing_prob=0.5):
+        super().__init__()
+        self.encoder = encoder 
+        self.decoder = decoder
+        self.input_len = input_len 
+        self.target_len = target_len
+        self.teacher_forcing_prob = teacher_forcing_prob 
+        self.outputs = None 
+
+    def init_outputs(self, batch_size):
+        device = next(self.parameters()).device 
+        # outputs: [N,L_target,F]
+        self.outputs = torch.zeros(batch_size, self.target_len, self.encoder.n_features).to(device)
+    
+    def store_output(self, i, out):
+        self.outputs[:,i:i+1,:] = out 
+
+    # X: [N,L,F] - L: full length of sequence; will be splitted
+    def forward(self, X):
+        source_seq = X[:, :self.input_len, :] # [N,L_source,F]
+        target_seq = X[:, self.input_len:, :] # [N,L_target,F]
+        self.init_outputs(X.shape[0])
+        hidden_seq = self.encoder(source_seq) # [N,L_source,H]
+        self.decoder.init_hidden(hidden_seq)
+        # The last input of the encoder is also the 1st input of the decoder
+        dec_inputs = source_seq[:,-1:,:] # [N,1,F]
+        for i in range(self.target_len):
+            out = self.decoder(dec_inputs)
+            self.store_output(i, out)
+            prob = self.teacher_forcing_prob 
+            if not self.training:
+                prob = 0
+            if torch.rand(1) <= prob:
+                dec_inputs = target_seq[:, i:i+1, :] # take the real measured value (more accurate)
+            else:
+                dec_inputs = out # take the predicted value (less accurate, from our current model)
+        return self.outputs 
+
+encdec = EncoderDecoder(encoder, decoder, input_len=2, target_len=2, teacher_forcing_prob=0.5)
+# in training mode, the model expects full sequence for teacher-forcing 
+encdec.train() # switch the 'model.train' property to True
+print("Naive prediction during training: ", encdec(full_seq))
+# in evaluation mode, the model expects only source sequence
+encdec.eval() # switch the 'model.train' property to False
+print("Naive prediction during evaluation: ", encdec(source_seq))
+
