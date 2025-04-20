@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader, Dataset, random_split, TensorDataset
 from data_generation.square_sequences import generate_sequences
 from stepbystep.v4 import StepByStep 
 from plots.chapter8 import *
+from plots.chapter9 import *
 
 fig = counter_vs_clock(binary=False)
 plt.savefig('test.png')
@@ -127,3 +128,35 @@ print("Naive prediction during training: ", encdec(full_seq))
 encdec.eval() # switch the 'model.train' property to False
 print("Naive prediction during evaluation: ", encdec(source_seq))
 
+## Data preparation
+points, directions = generate_sequences(n=256, seed=13)
+full_train = torch.as_tensor(np.array(points)).float() # [256,4,2]
+target_train = full_train[:, 2:] # [256,2,2]
+
+test_points, test_directions = generate_sequences(seed=19)
+full_test = torch.as_tensor(np.array(test_points)).float()
+source_test = full_test[:, :2] #  [128,2,2]
+target_test = full_test[:, 2:] # [128,2,2]
+
+train_data = TensorDataset(full_train, target_train)
+test_data = TensorDataset(source_test, target_test)
+generator = torch.Generator()
+train_loader = DataLoader(train_data, batch_size=16, shuffle=True, generator=generator)
+test_loader = DataLoader(test_data, batch_size=16)
+
+## Model configuration and training 
+torch.manual_seed(23)
+encoder = Encoder(n_features=2, hidden_dim=2)
+decoder = Decoder(n_features=2, hidden_dim=2)
+model = EncoderDecoder(encoder, decoder, input_len=2, target_len=2, teacher_forcing_prob=0.5)
+loss = nn.MSELoss()
+optimizer = optim.Adam(model.parameters(), lr=0.01)
+sbs_seq = StepByStep(model, loss, optimizer)
+sbs_seq.set_loaders(train_loader, test_loader)
+sbs_seq.train(100)
+fig = sbs_seq.plot_losses()
+plt.savefig('test.png')
+
+## Visualize predictions
+fig = sequence_pred(sbs_seq, full_test, test_directions)
+plt.savefig('test.png')
