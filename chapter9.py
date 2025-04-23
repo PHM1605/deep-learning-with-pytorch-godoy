@@ -176,7 +176,7 @@ keys = hidden_seq
 torch.manual_seed(31)
 decoder = Decoder(n_features=2, hidden_dim=2)
 decoder.init_hidden(hidden_seq)
-inputs = source_seq[:,-1] # [N,1,F]=[1,1,2]
+inputs = source_seq[:,-1:] # [N,1,F]=[1,1,2]
 out = decoder(inputs)
 query = decoder.hidden.permute(1,0,2) # hidden: [1,N,H]=>[N,1,H]
 

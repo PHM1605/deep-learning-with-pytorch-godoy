@@ -1,6 +1,9 @@
 import matplotlib.pyplot as plt 
 import numpy as np 
 
+def add_arrow(line, position=None, direction='right', size=15, color=None, lw=2, alpha=1.0, text=None, text_offset=(0,0)):
+    pass 
+
 # X: [128,4,2]
 def sequence_pred(sbs_obj, X, directions=None, n_rows=2, n_cols=5):
     fig, axs = plt.subplots(n_rows, n_cols, figsize=(4*n_cols, 4*n_rows))
@@ -35,5 +38,23 @@ def sequence_pred(sbs_obj, X, directions=None, n_rows=2, n_cols=5):
     fig.tight_layout()
     return fig 
 
+def make_line(ax, point):
+    point = np.vstack([[0,0], np.array(point.squeeze().tolist())])
+    line = ax.plot(*point.T, lw=0)[0]
+    return line
+
+# q: [H], ks: [L,H] with L=sequence length, H=hidden size
 def query_and_keys(q, ks, result=None, ax=None):
-    pass
+    if ax is None:
+        fig, ax = plt.subplots(1, 1, figsize=(5,5))
+    else:
+        fig = ax.get_figure()
+    norm_q = np.linalg.norm(q)
+    line_q = make_line(ax, q)
+    line_k = []
+    norm_k = []
+    cos_k = []
+    for k in ks:
+        line_k.append(make_line(ax, k))
+        norm_k.append(np.linalg.norm(k))
+        cos_k.append(np.dot(q, k)/(norm_k[-1]*norm_q))
