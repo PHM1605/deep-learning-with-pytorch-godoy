@@ -206,3 +206,5 @@ scaled_products = products / np.sqrt(dims)
 q = torch.tensor([0.55, 0.95]).view(1,1,2) # [N,1,H]
 k = torch.tensor([[0.65, 0.2], [0.85, -0.4], [-0.95, -0.75]]).view(1,3,2) # [N,L,H]
 fig = query_and_keys(q.squeeze(), k.view(3,2)) # [H], [L,H]
+plt.savefig('test.png')
+
