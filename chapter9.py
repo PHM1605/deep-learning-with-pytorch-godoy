@@ -378,3 +378,37 @@ point_labels = [
 ]
 fig = plot_attention(model, inputs, point_labels, source_labels, target_labels)
 plt.savefig('test.png')
+
+## MultiHeadAttention
+class MultiHeadAttention(nn.Module):
+    def __init__(self, n_heads, d_model, input_dim=None, proj_values=True):
+        super().__init__()
+        self.linear_out = nn.Linear(n_heads*d_model, d_model)
+        self.attn_heads = nn.ModuleList(
+            [
+                Attention(d_model, input_dim=input_dim, proj_values=proj_values) 
+                for _ in range(n_heads)
+            ]
+        )
+
+    def init_keys(self, key):
+        for attn in self.attn_heads:
+            attn.init_keys(key)
+    
+    @property
+    def alphas(self):
+        # [n_heads, N, 1, L(source)]
+        return torch.stack([
+            attn.alphas for attn in self.attn_heads
+        ], dim=0)
+
+    def output_function(self, contexts):
+        concatenated = torch.cat(contexts, axis=-1) # list of [N,1,d_model] => [N,1,d_models*n_heads]
+        out = self.linear_out(concatenated)
+        return out 
+
+    def forward(self, query, mask=None):
+        contexts = [
+            attn(query, mask=mask)
+            for attn in self.attn_heads]
+        out = self.output_function(contexts)

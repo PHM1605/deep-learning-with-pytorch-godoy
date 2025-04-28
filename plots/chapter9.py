@@ -110,7 +110,7 @@ def query_and_keys(q, ks, result=None, ax=None):
     return fig
 
 def plot_attention(model, inputs, point_labels=None, source_labels=None, target_labels=None, decoder=False, self_attn=False, n_cols=5, alphas_attr='alphas'):
-    text_colors = ["white", "black"]
+    textcolors = ["white", "black"]
     kw = dict(horizontalalignment="center", verticalalignment="center")
     valfmt = matplotlib.ticker.StrMethodFormatter("{x:.2f}")
     model.eval()
@@ -141,7 +141,7 @@ def plot_attention(model, inputs, point_labels=None, source_labels=None, target_
     fig, axs = plt.subplots(n_rows, n_cols, figsize=(n_cols*3, n_rows*3))
     for i in range(n_points):
         for head in range(n_heads):
-            data = alphas[head][i].squeeze()
+            data = alphas[head][i].squeeze() # [L(target), L(source)]
             if n_heads > 1:
                 if n_points > 1:
                     ax = axs[i, head]
@@ -151,7 +151,33 @@ def plot_attention(model, inputs, point_labels=None, source_labels=None, target_
                 ax = axs.flat[i]
             im = ax.imshow(data, vmin=0, vmax=1, cmap=plt.cm.gray)
             ax.grid(False)
-            
+            ax.set_xticks(np.arange(data.shape[1]))
+            ax.set_yticks(np.arange(data.shape[0]))
+            ax.set_xticklabels(source_labels)
+            if n_heads == 1:
+                ax.set_title(point_labels[i], fontsize=14)
+            else:
+                if i==0:
+                    ax.set_title(f'Attention Head #{head+1}', fontsize=14)
+                if head==0:
+                    ax.set_ylabel(point_labels[i], fontsize=14)
+
+            ax.set_yticklabels([])
+            if n_heads == 1:
+                if not(i%n_cols): # i=0 or 5 i.e. column 0th
+                    ax.set_yticklabels(target_labels)
+            else:
+                if head==0:
+                    ax.set_yticklabels(target_labels) # attention #0 i.e. column 0th
+            ax.set_xticks(np.arange(data.shape[1]+1)-0.5, minor=True)
+            ax.set_yticks(np.arange(data.shape[0]+1)-0.5, minor=True)
+            ax.tick_params(top=True, bottom=False, labeltop=True, labelbottom=False)
+
+            threshold = im.norm(data.max())/2
+            for ip in range(data.shape[0]):
+                for jp in range(data.shape[1]):
+                    kw.update(color=textcolors[int(im.norm(data[ip,jp]) > threshold)])
+                    text = im.axes.text(jp, ip, valfmt(data[ip, jp], None), **kw)
 
     fig.subplots_adjust(wspace=0.8, hspace=1.0)
     fig.tight_layout()
