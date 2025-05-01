@@ -247,10 +247,10 @@ class Attention(nn.Module):
     
     def score_function(self, query):
         proj_query = self.linear_query(query)
-        # [N,1,H]x[N,H,L]->[N,1,L]
+        # [N,L(query),H]x[N,H,L(sequence)]->[N,L(query),L(sequence)]
         dot_products = torch.bmm(proj_query, self.proj_keys.permute(0,2,1))
         scores = dot_products / np.sqrt(self.d_k)
-        return scores # [N,1,L]
+        return scores # [N,L(query),L(sequence)]
 
     def forward(self, query, mask=None):
         # query: [N,1,L]; scores: [N,1,H]
@@ -258,7 +258,7 @@ class Attention(nn.Module):
         if mask is not None:            
             # set scores of padding sample [0,0] to minus infinity
             scores = scores.masked_fill(mask==0, -1e9) # [N,1,L]=[[[False,True]]]
-        alphas = F.softmax(scores, dim=-1) # [N,1,L]
+        alphas = F.softmax(scores, dim=-1) # [N,L(query),L]
         self.alphas = alphas.detach()
         # [N,1,L]x[N,L,H]->[N,1,H]
         context = torch.bmm(alphas, self.values)
@@ -276,6 +276,7 @@ attnh = Attention(2) # hidden_dim = input_dim = 2
 attnh.init_keys(keys) # init key and value
 context = attnh(query, mask=source_mask)
 print("Attention alphas: ", attnh.alphas)
+print(context)
 
 class DecoderAttn(nn.Module):
     def __init__(self, n_features, hidden_dim):
@@ -412,3 +413,77 @@ class MultiHeadAttention(nn.Module):
             attn(query, mask=mask)
             for attn in self.attn_heads]
         out = self.output_function(contexts)
+        return out 
+
+class EncoderSelfAttn(nn.Module):
+    # n_features: dimension of input sequence
+    def __init__(self, n_heads, d_model, ff_units, n_features=None):
+        super().__init__()
+        self.n_heads = n_heads 
+        self.d_model = d_model 
+        self.ff_units = ff_units # dimension of after FeedForward 1st layer 
+        self.n_features = n_features # input dimension
+        self.self_attn_heads = MultiHeadAttention(
+            n_heads, d_model, input_dim=n_features)
+        self.ffn = nn.Sequential(
+            nn.Linear(d_model, ff_units), 
+            nn.ReLU(), 
+            nn.Linear(ff_units, d_model)
+        )
+
+    def forward(self, query, mask=None):
+        self.self_attn_heads.init_keys(query)
+        att = self.self_attn_heads(query, mask)
+        out = self.ffn(att)
+        return out
+
+torch.manual_seed(11)
+encself = EncoderSelfAttn(n_heads=3, d_model=2, ff_units=10, n_features=2)
+query = source_seq # [N,L,F]
+encoder_states = encself(query) # [N,L,L]
+print("Encoder hidden state: ", encoder_states)
+
+class DecoderSelfAttn(nn.Module):
+    def __init__(self, n_heads, d_model, ff_units, n_features=None):
+        super().__init__()
+        self.n_heads = n_heads
+        self.d_model = d_model
+        self.ff_units = ff_units 
+        self.n_features = d_model if n_features is None else n_features 
+        self.self_attn_heads = MultiHeadAttention(n_heads, d_model, input_dim=self.n_features)
+        self.cross_attn_heads = MultiHeadAttention(n_heads, d_model, input_dim=self.n_features)
+        self.ffn = nn.Sequential(
+            nn.Linear(d_model, ff_units),
+            nn.ReLU(),
+            nn.Linear(ff_units, self.n_features)
+        )
+    
+    def init_keys(self, states):
+        self.cross_attn_heads.init_keys(states)
+    
+    def forward(self, query, source_mask=None, target_mask=None):
+        self.self_attn_heads.init_keys(query)
+        att1 = self.self_attn_heads(query, target_mask)
+        att2 = self.cross_attn_heads(att1, source_mask)
+        out = self.ffn(att2)
+        return out 
+
+shifted_seq = torch.cat([source_seq[:,-1:], target_seq[:,:-1]], dim=1)
+
+## Decoder mask
+def subsequent_mask(size):
+    attn_shape = (1, size, size)
+    # torch.triu: return the upper triangular matrix (above the diagonal)
+    # diagonal=1: remove diagonal too (set it to 0); diagonal=0: keep it
+    subsequent_mask = (1- torch.triu(torch.ones(attn_shape), diagonal=1)
+        ).bool()
+    return subsequent_mask
+print("Decoder mask: ", subsequent_mask(2)) # [[[True,False], [True,True]]]
+
+torch.manual_seed(13)
+decself = DecoderSelfAttn(n_heads=3, d_model=2, ff_units=10, n_features=2)
+decself.init_keys(encoder_states) # init K&V of cross-attention
+query = shifted_seq 
+out = decself(query, target_mask=subsequent_mask(2)) # init K&V of self-attention and run 
+print("Decoder alphas: ", decself.self_attn_heads.alphas) #  [n_heads,N,L,L]
+print("Decoder output shape: ", out.shape) # [1,2,2]
