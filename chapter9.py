@@ -348,37 +348,37 @@ class EncoderDecoderAttn(EncoderDecoder):
         self.outputs[:, i:i+1, :] = out
         self.alphas[:, i:i+1, :] = self.decoder.attn.alphas 
 
-torch.manual_seed(17)
-encoder = Encoder(n_features=2, hidden_dim=2)
-decoder_attn = DecoderAttn(n_features=2, hidden_dim=2)
-model = EncoderDecoderAttn(encoder, decoder_attn, input_len=2, target_len=2, teacher_forcing_prob=0.5)
-loss = nn.MSELoss() 
-optimizer = optim.Adam(model.parameters(), lr=0.01)
-sbs_seq_attn = StepByStep(model, loss, optimizer)
-sbs_seq_attn.set_loaders(train_loader, test_loader)
-sbs_seq_attn.train(100)
-fig = sbs_seq_attn.plot_losses()
-plt.savefig('test.png')
+# torch.manual_seed(17)
+# encoder = Encoder(n_features=2, hidden_dim=2)
+# decoder_attn = DecoderAttn(n_features=2, hidden_dim=2)
+# model = EncoderDecoderAttn(encoder, decoder_attn, input_len=2, target_len=2, teacher_forcing_prob=0.5)
+# loss = nn.MSELoss() 
+# optimizer = optim.Adam(model.parameters(), lr=0.01)
+# sbs_seq_attn = StepByStep(model, loss, optimizer)
+# sbs_seq_attn.set_loaders(train_loader, test_loader)
+# sbs_seq_attn.train(100)
+# fig = sbs_seq_attn.plot_losses()
+# plt.savefig('test.png')
 
-# Visualizing Predictions
-fig = sequence_pred(sbs_seq_attn, full_test, test_directions)
-plt.savefig('test.png')
+# # Visualizing Predictions
+# fig = sequence_pred(sbs_seq_attn, full_test, test_directions)
+# plt.savefig('test.png')
 
-# Visualizing Attention
-# First sample
-inputs = full_train[:1, :2] # [1,2,2]
-out = sbs_seq_attn.predict(inputs)
-print("Attention score of first sample:\n", sbs_seq_attn.model.alphas)
-# First 10 samples 
-inputs = full_train[:10, :2] # [10,2,2]
-source_labels = ['Point #1', 'Point #2']
-target_labels = ['Point #3', 'Point #4']
-point_labels = [
-    f'{"Counter-" if not directions[i] else ""}Clockwise\nPoint #1: {inp[0,0]:.2f},{inp[0,1]:.2f}'
-    for i, inp in enumerate(inputs)
-]
-fig = plot_attention(model, inputs, point_labels, source_labels, target_labels)
-plt.savefig('test.png')
+# # Visualizing Attention
+# # First sample
+# inputs = full_train[:1, :2] # [1,2,2]
+# out = sbs_seq_attn.predict(inputs)
+# print("Attention score of first sample:\n", sbs_seq_attn.model.alphas)
+# # First 10 samples 
+# inputs = full_train[:10, :2] # [10,2,2]
+# source_labels = ['Point #1', 'Point #2']
+# target_labels = ['Point #3', 'Point #4']
+# point_labels = [
+#     f'{"Counter-" if not directions[i] else ""}Clockwise\nPoint #1: {inp[0,0]:.2f},{inp[0,1]:.2f}'
+#     for i, inp in enumerate(inputs)
+# ]
+# fig = plot_attention(model, inputs, point_labels, source_labels, target_labels)
+# plt.savefig('test.png')
 
 ## MultiHeadAttention
 class MultiHeadAttention(nn.Module):
@@ -470,20 +470,100 @@ class DecoderSelfAttn(nn.Module):
 
 shifted_seq = torch.cat([source_seq[:,-1:], target_seq[:,:-1]], dim=1)
 
-## Decoder mask
-def subsequent_mask(size):
-    attn_shape = (1, size, size)
-    # torch.triu: return the upper triangular matrix (above the diagonal)
-    # diagonal=1: remove diagonal too (set it to 0); diagonal=0: keep it
-    subsequent_mask = (1- torch.triu(torch.ones(attn_shape), diagonal=1)
-        ).bool()
-    return subsequent_mask
-print("Decoder mask: ", subsequent_mask(2)) # [[[True,False], [True,True]]]
+# ## Decoder mask
+# def subsequent_mask(size):
+#     attn_shape = (1, size, size)
+#     # torch.triu: return the upper triangular matrix (above the diagonal)
+#     # diagonal=1: remove diagonal too (set it to 0); diagonal=0: keep it
+#     subsequent_mask = (1- torch.triu(torch.ones(attn_shape), diagonal=1)
+#         ).bool()
+#     return subsequent_mask
+# print("Decoder mask: ", subsequent_mask(2)) # [[[True,False], [True,True]]]
 
-torch.manual_seed(13)
+# torch.manual_seed(13)
+# decself = DecoderSelfAttn(n_heads=3, d_model=2, ff_units=10, n_features=2)
+# decself.init_keys(encoder_states) # init K&V of cross-attention
+# query = shifted_seq 
+# out = decself(query, target_mask=subsequent_mask(2)) # init K&V of self-attention and run 
+# print("Decoder alphas: ", decself.self_attn_heads.alphas) #  [n_heads,N,L,L]
+# print("Decoder output shape: ", out.shape) # [1,2,2]
+
+# # 1st target 
+# inputs = source_seq[:, -1:] # [N,L,F]=[N,1,F]
+# trg_masks = subsequent_mask(1)
+# out = decself(inputs, target_mask=trg_masks)
+# print("1st target prediction: ", out) # [1,1,2]
+# # 2nd target: decoder expect full sequence as query
+# inputs = torch.cat([inputs, out[:,-1:,:]], dim=-2)
+# print("Input of 2 samples: ", inputs)
+# trg_masks = subsequent_mask(2)
+# out = decself(inputs, target_mask=trg_masks)
+# print("1st and 2nd target prediction: ", out)
+# inputs = torch.cat([inputs, out[:,-1:,:]], dim=-2)
+# print("Input of 3 samples: ", inputs)
+# print("Predicted sequence: ", inputs[:, 1:])
+
+class EncoderDecoderSelfAttn(nn.Module):
+    def __init__(self, encoder, decoder, input_len, target_len):
+        super().__init__()
+        self.encoder = encoder 
+        self.decoder = decoder 
+        self.input_len = input_len 
+        self.target_len = target_len 
+        self.trg_masks = self.subsequent_mask(self.target_len)
+    
+    @staticmethod 
+    def subsequent_mask(size):
+        attn_shape = (1, size, size)
+        subsequent_mask = (1-torch.triu(torch.ones(attn_shape), diagonal=1))
+        return subsequent_mask 
+    
+    # encode the source sequence and use the output to initialize the decoder 
+    def encode(self, source_seq, source_mask):
+        encoder_states = self.encoder(source_seq, source_mask)
+        self.decoder.init_keys(encoder_states)
+
+    # during TRAINING
+    def decode(self, shifted_target_seq, source_mask=None, target_mask=None):
+        outputs = self.decoder(shifted_target_seq, source_mask=source_mask, target_mask=target_mask)
+        return outputs
+
+    # during VALIDATION
+    def predict(self, source_seq, source_mask):
+        inputs = source_seq[:, -1:]
+        for i in range(self.target_len):
+            out = self.decode(inputs, source_mask, self.trg_masks[:,:i+1,:i+1]) # target mask will increase in size over time
+            out = torch.cat([inputs, out[:,-1:,:]], dim=-2) # decoder input will increase size with its prediction overtime
+            inputs = out.detach()
+        outputs = inputs[:,1:,:]
+        return outputs 
+    
+    def forward(self, X, source_mask=None):
+        self.trg_masks = self.trg_masks.type_as(X).bool()
+        source_seq = X[:,:self.input_len,:]
+        # encode the source sequence and initialize decoder
+        self.encode(source_seq, source_mask)
+        if self.training:
+            shifted_target_seq = X[:, self.input_len-1:-1, :]
+            outputs = self.decode(shifted_target_seq, source_mask, self.trg_masks)
+        else:
+            outputs = self.predict(source_seq, source_mask)
+        return outputs 
+
+torch.manual_seed(23)
+encself = EncoderSelfAttn(n_heads=3, d_model=2, ff_units=10, n_features=2)
 decself = DecoderSelfAttn(n_heads=3, d_model=2, ff_units=10, n_features=2)
-decself.init_keys(encoder_states) # init K&V of cross-attention
-query = shifted_seq 
-out = decself(query, target_mask=subsequent_mask(2)) # init K&V of self-attention and run 
-print("Decoder alphas: ", decself.self_attn_heads.alphas) #  [n_heads,N,L,L]
-print("Decoder output shape: ", out.shape) # [1,2,2]
+model = EncoderDecoderSelfAttn(encself, decself, input_len=2, target_len=2)
+loss = nn.MSELoss()
+optimizer = optim.Adam(model.parameters(), lr=0.01)
+sbs_seq_selfattn = StepByStep(model, loss, optimizer)
+sbs_seq_selfattn.set_loaders(train_loader, test_loader)
+sbs_seq_selfattn.train(100)
+fig = sbs_seq_selfattn.plot_losses()
+plt.savefig('test.png')
+fig = sequence_pred(sbs_seq_selfattn, full_test, test_directions)
+plt.savefig('test.png')
+
+## Positional Encoding
+fig = encoding_degrees(dims=3, seqs=(4,5,7), tot=8)
+plt.savefig('test.png')

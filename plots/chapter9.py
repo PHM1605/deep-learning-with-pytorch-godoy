@@ -183,6 +183,34 @@ def plot_attention(model, inputs, point_labels=None, source_labels=None, target_
     fig.tight_layout()
     return fig 
 
+def plot_text(x, y, text, ax, fontsize=24):
+    ax.text(x, y, text, fontsize=fontsize)
+    ax.grid(False)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_ylim([-1,1])
+    ax.set_xlim([-1,1])
+
+# dims: number of rows to encode; tot: number of columns = length of sequences
+# seqs=(4,5,7); tot=8
+def encoding_degrees(dims, seqs, tot):
+    fig, axs = plt.subplots(dims+1, tot+1, figsize=(2*(tot+1), 2*(dims+1)))
+    axs = np.atleast_2d(axs)
+    plot_text(-0.5, -0.5, 'Position', axs[0,0])
+    for dim in range(dims):
+        tmp = np.linspace(0, tot/seqs[dim], tot+1)*2*np.pi # how many % of a cycle
+        xs, ys = np.cos(tmp).reshape(-1,1), np.sin(tmp).reshape(-1,1)
+        for seq in range(tot): # 0->7
+            plot_text(-0.1, -0.5, seq, axs[0, seq+1])
+            if seq == 0:
+                plot_text(-0.5, -0.2, f'Base {seqs[dim]}', axs[dim+1,0])
+                plot_text(-0.5, -1.3, f'(sine, cosine)', axs[dim+1,0], fontsize=16)
+            # plot_dial(xs, ys, seq=seq, dim=0, scale=f'1/{seqs[dim]}', ax=axs[dim+1, seq+1], has_coords=True)
+        seqs *= 2
+        print("AB:", seqs)
+    fig.tight_layout()
+    return fig
+
 def figure9():
     english = ['the', 'European', 'economic', 'zone']
     french = ['la', 'zone', 'économique', 'européenne']
