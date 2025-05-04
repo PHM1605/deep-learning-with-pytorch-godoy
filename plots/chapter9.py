@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt 
 import matplotlib 
 import numpy as np 
+import torch
 
 def add_arrow(line, position=None, direction='right', size=15, color=None, lw=2, alpha=1.0, text=None, text_offset=(0,0)):
     if color is None:
@@ -116,8 +117,9 @@ def plot_attention(model, inputs, point_labels=None, source_labels=None, target_
     model.eval()
     device = list(model.parameters())[0].device.type
     predicted_seqs = model(inputs.to(device))
-    for attr in alphas_attr.split('.'): # 'alphas'
-        alphas = getattr(model, attr)
+    alphas = model 
+    for attr in alphas_attr.split('.'): # ['encoder','layer','self_attn_heads','alphas']
+        alphas = getattr(alphas, attr)
     if len(alphas.shape) < 4: # [N,L(target),L(source)]=[10,2,2]=>[1,10,2,2]
         alphas = alphas.unsqueeze(0)
     alphas = np.array(alphas.tolist())
@@ -131,6 +133,13 @@ def plot_attention(model, inputs, point_labels=None, source_labels=None, target_
     
     if target_labels is None:
         target_labels = [f'Target #{i}' for i in range(target_len)]
+    
+    # if self-attention then source=>target is [point-1,point-2]=>[point-1, point-2]
+    if self_attn:
+        if decoder:
+            source_labels = source_labels[-1:] + target_labels[:-1]
+        else:
+            target_labels = source_labels
     
     if n_heads == 1:
         n_rows = (n_points//n_cols) + int((n_points%n_cols) > 0)
@@ -191,6 +200,33 @@ def plot_text(x, y, text, ax, fontsize=24):
     ax.set_ylim([-1,1])
     ax.set_xlim([-1,1])
 
+# seq: sequence index 0->7
+def plot_dial(xs, ys, seq, dim, scale, ax, has_coords=False):
+    # to make the circle resolution
+    point = np.array([xs[1,0], ys[1,0]])
+    point = np.vstack([point*0.9, point*1.1])
+    line_tick = ax.plot(*point.T, lw=2, c='k')[0]
+    line_zero = ax.plot([0.9,1.1], [0,0], lw=2, c='k')[0]
+
+    q = np.array([xs[seq, dim], ys[seq, dim]])
+    line_q = make_line(ax, q*0.95)
+    add_arrow(line_q, lw=2, color='r', text='', size=12)
+    
+    circle1 = plt.Circle((0,0), 1., color='k', fill=False, lw=2)
+    ax.add_artist(circle1)
+
+    ax.set_xlim([-1.1, 1.1])
+    ax.set_ylim([-1.1, 1.1])
+    ax.grid(False)
+
+    ax.text(xs[1,0]+np.sign(xs[1,0])*0.1-0.2, ys[1,0]+(0.15 if ys[1,0]>0.001 else -0.05), scale)
+    ax.text(1.2, -0.05, '0')
+    if has_coords:
+        ax.set_xlabel(f'({ys[seq, dim]:.2f}, {xs[seq, dim]:.2f})')
+
+    ax.set_xticks([])
+    ax.set_yticks([])
+
 # dims: number of rows to encode; tot: number of columns = length of sequences
 # seqs=(4,5,7); tot=8
 def encoding_degrees(dims, seqs, tot):
@@ -205,11 +241,104 @@ def encoding_degrees(dims, seqs, tot):
             if seq == 0:
                 plot_text(-0.5, -0.2, f'Base {seqs[dim]}', axs[dim+1,0])
                 plot_text(-0.5, -1.3, f'(sine, cosine)', axs[dim+1,0], fontsize=16)
-            # plot_dial(xs, ys, seq=seq, dim=0, scale=f'1/{seqs[dim]}', ax=axs[dim+1, seq+1], has_coords=True)
+            plot_dial(xs, ys, seq=seq, dim=0, scale=f'1/{seqs[dim]}', ax=axs[dim+1, seq+1], has_coords=True)
         seqs *= 2
-        print("AB:", seqs)
     fig.tight_layout()
     return fig
+
+# angular_speed: exp([0,2,4,6]*(-100/8)), if #encoding-rows big then slow speed 
+def gen_coords(d_model, max_len, exponent=10000):
+    position = torch.arange(0, max_len).float().unsqueeze(1) # [[0],[1],...,[9]]
+    angular_speed = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(exponent)/d_model))
+    # [10,1]*[4]=[10,4]
+    return np.cos(position*angular_speed), np.sin(position*angular_speed)
+
+def exponential_dials(d_model, max_len):
+    xs, ys = gen_coords(d_model, max_len)
+    dims = int(d_model/2)
+    seqs = max_len
+    fig, axs = plt.subplots(dims+1, seqs+1, figsize=(2*(seqs+1), 2*(dims+1)))
+    axs = np.atleast_2d(axs)
+    plot_text(-0.5, -0.5, 'Position', axs[0,0])
+    for seq in range(seqs):
+        plot_text(-0.1, -0.5, seq, axs[0, seq+1])
+        for dim in range(dims):
+            scale = 10**dim 
+            if seq==0:
+                plot_text(-0.5, -0.2, f'Dims #{2*dim},#{2*dim+1}', axs[dim+1,0], fontsize=16)
+                plot_text(-0.5, -1.35, f'(sine, cosine)', axs[dim+1,0], fontsize=16)
+            plot_dial(xs, ys, seq=seq, dim=dim, scale=scale, ax=axs[dim+1, seq+1], has_coords=True)
+    fig.tight_layout()
+    return fig
+
+def plot_mesh(values, ax, showvals=False, colorbar=False, ylabel=None):
+    max_len, d_model = values.squeeze().shape 
+    if ax is None:
+        fig, ax = plt.subplots(1, 1, figsize=(12, 4))
+    else:
+        fig = ax.get_figure()
+    im = ax.pcolormesh(values.T, cmap='viridis') # color-meshing lines with non-NaN values
+    if ylabel is None:
+        ylabel = 'Dimensions'
+    
+    ax.set_ylabel(ylabel)
+    ax.set_ylim((d_model-0.5, 0)) # ylim 7.5->0
+    ax.set_yticks(np.arange(d_model+1, -1, -1)-0.5) # yticks 8.5-> -0.5
+    ax.set_yticklabels([''] + list(range(d_model-1, -1, -1)) + ['']) # ylabels ['',9,8,...,0,'']
+
+    ax.set_xlabel('Positions')
+    ax.set_xlim((0, max_len)) # xlim 0->10
+    ax.set_xticks(np.arange(0, max_len+1)-0.5) # xticks -0.5->9.5
+    ax.set_xticklabels([''] + list(range(0, max_len))) # xlabels ['',0,...,9]
+
+    if colorbar:
+        plt.colorbar(im)
+    
+    if showvals:
+        textcolors = ["white", "black"]
+        kw = dict(horizontalalignment="center", verticalalignment="center")
+        valfmt = matplotlib.ticker.StrMethodFormatter("{x:.2f}")
+        threshold = im.norm(values.max())/2
+        for ip in range(values.shape[0]):
+            for jp in range(values.shape[1]):
+                kw.update(color=textcolors[int(im.norm(values[ip, jp]) > threshold)])
+                text = im.axes.text(jp+0.5, ip+0.5, valfmt(values[ip, jp], None), **kw)
+
+    fig.tight_layout()
+    return fig 
+
+
+def encoding_heatmap(d_model, max_len):
+    position = torch.arange(0, max_len).float().unsqueeze(1)  # [10,1]
+    angular_speed = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0)/d_model)) # exp(arange*log/(-d)) = 10000^(arange/(-d)) = 1/10000^([0,2,4,8]/d)
+    # encoding = torch.zeros(max_len, d_model) # [10,8]
+    # encoding[:, 0::2] = torch.sin(angular_speed*position) # 0::2 means [0,2,4,...]
+    # encoding[:, 1::2] = torch.cos(angular_speed*position) # 1::2 means [1,3,5,...]
+    fig, axs = plt.subplots(2, 2, figsize=(14, 8))
+    sines = torch.sin(angular_speed*position)
+    cosines = torch.cos(angular_speed*position)
+    axs = axs.flatten()
+    
+    axs[0].plot(sines)
+    axs[0].set_title('Sines - Even Dimensions')
+    axs[0].legend(["dim %d" % p for p in range(0,8,2)], loc='lower left')
+
+    axs[1].plot(cosines)
+    axs[1].set_title('Cosines - Odd Dimensions')
+    axs[1].legend(["dim %d" % p for p in range(1,9,2)], loc='lower left')
+
+    values = np.zeros((max_len, d_model))
+    values.fill(np.nan)
+    values[:, 0::2] = sines 
+    fig = plot_mesh(values, axs[2])
+
+    values = np.zeros((max_len, d_model))
+    values.fill(np.nan)
+    values[:, 1::2] = cosines 
+    fig = plot_mesh(values, axs[3])
+
+    return fig
+
 
 def figure9():
     english = ['the', 'European', 'economic', 'zone']
