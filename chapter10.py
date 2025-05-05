@@ -11,6 +11,7 @@ from data_generation.square_sequences import generate_sequences
 # from data_generation.image_classification import generate_dataset 
 # from helpers import index_splitter, make_balanced_sampler 
 from stepbystep.v4 import StepByStep 
+from seq2seq import PositionalEncoding, subsequent_mask 
 # from seq2seq import PositionalEncoding, subsequent_mask, EncoderDecoderSelfAttn 
 from plots.chapter8 import *
 from plots.chapter9 import *
@@ -176,6 +177,7 @@ class DecoderLayer(nn.Module):
         out = att2 + self.drop3(out)
         return out 
 
+# in PyTorch: nn.TransformerDecoder 
 class DecoderTransf(nn.Module):
     def __init__(self, decoder_layer, n_layers=1, max_len=100):
         super(DecoderTransf, self).__init__()
@@ -186,3 +188,35 @@ class DecoderTransf(nn.Module):
             copy.deepcopy(decoder_layer)
             for _ in range(n_layers)
         ])
+    
+    def init_keys(self, states):
+        for layer in self.layers:
+            layer.init_keys(states)
+    
+    def forward(self, query, source_mask=None, target_mask=None):
+        x = self.pe(query)
+        for layer in self.layers:
+            x = layer(x, source_mask, target_mask)
+        return self.norm(x)
+    
+## Layer Normalization - normalize rows i.e. each sample
+d_model = 4
+seq_len = 2
+n_points = 3
+torch.manual_seed(34)
+data = torch.randn(n_points, seq_len, d_model)
+pe = PositionalEncoding(seq_len, d_model)
+inputs = pe(data) # [N,L,D]=[3,2,4]
+print("Inputs shape: ", inputs.shape)
+inputs_mean = inputs.mean(axis=2).unsqueeze(2)
+print("Inputs mean of every sample:\n", inputs_mean) # [N,L,1]
+inputs_var = inputs.var(axis=2, unbiased=False).unsqueeze(2)
+print("Inputs var of every sample:\n", inputs_var) # [N,L,1]
+print("Layer normalization manually:\n", (inputs-inputs_mean)/torch.sqrt(inputs_var+1e-5))
+# Layer Normalization using PyTorch built-in
+layer_norm = nn.LayerNorm(d_model)
+normalized = layer_norm(inputs)
+print(inputs)
+print(normalized)
+print("Layer normalization by library mean and std (1st sample only):\n", normalized[0][0].mean(), normalized[0][0].std(unbiased=False))
+print(layer_norm.state_dict()['weight'])
