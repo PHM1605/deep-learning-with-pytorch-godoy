@@ -216,7 +216,6 @@ print("Layer normalization manually:\n", (inputs-inputs_mean)/torch.sqrt(inputs_
 # Layer Normalization using PyTorch built-in
 layer_norm = nn.LayerNorm(d_model)
 normalized = layer_norm(inputs)
-print(inputs)
-print(normalized)
 print("Layer normalization by library mean and std (1st sample only):\n", normalized[0][0].mean(), normalized[0][0].std(unbiased=False))
-print(layer_norm.state_dict()['weight'])
+# Notice: LayerNorm learnable weight and bias don't interfere with input; but do the normalization calculation as a pre-effect
+print("LayerNorm learnable weight and bias: ", layer_norm.state_dict())
