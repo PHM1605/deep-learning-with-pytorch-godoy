@@ -199,7 +199,7 @@ class DecoderTransf(nn.Module):
             x = layer(x, source_mask, target_mask)
         return self.norm(x)
     
-## Layer Normalization - normalize rows i.e. each sample
+## Layer Normalization - normalize rows i.e. mean and std over input-dimension-D
 d_model = 4
 seq_len = 2
 n_points = 3
@@ -219,3 +219,17 @@ normalized = layer_norm(inputs)
 print("Layer normalization by library mean and std (1st sample only):\n", normalized[0][0].mean(), normalized[0][0].std(unbiased=False))
 # Notice: LayerNorm learnable weight and bias don't interfere with input; but do the normalization calculation as a pre-effect
 print("LayerNorm learnable weight and bias: ", layer_norm.state_dict())
+
+## Batch vs Layer
+torch.manual_seed(23)
+dummy_points = torch.randn(4,1,256)
+dummy_pe = PositionalEncoding(1,256)
+dummy_enc = dummy_pe(dummy_points) # [4,1,256]
+fig = hist_encoding(dummy_enc)
+plt.savefig('test.png')
+
+layer_normalizer = nn.LayerNorm(256)
+dummy_normed = layer_normalizer(dummy_enc)
+print("Encoder normed: ", dummy_normed)
+fig = hist_layer_normed(dummy_enc, dummy_normed)
+plt.savefig('test.png')
