@@ -26,3 +26,41 @@ class PositionalEncoding(nn.Module):
         encoded = scaled_x + self.pe[:, :x.size(1),:] # [N,L,D]
         return encoded 
 
+class EncoderDecoderSelfAttn(nn.Module):
+    def __init__(self, encoder, decoder, input_len, target_len):
+        super().__init__()
+        self.encoder = encoder 
+        self.decoder = decoder 
+        self.input_len = input_len 
+        self.target_len = target_len 
+        self.trg_masks = subsequent_mask(self.target_len)
+
+    def encode(self, source_seq, source_mask):
+        encoder_states = self.encoder(source_seq, source_mask)
+        self.decoder.init_keys(encoder_states)
+    
+    # use in TRAIN mode 
+    def decode(self, shifted_target_seq, source_mask=None, target_mask=None):
+        outputs = self.decoder(shifted_target_seq, source_mask=source_mask, target_mask=target_mask)
+        return outputs 
+    
+    # use in VAL mode
+    def predict(self, source_seq, source_mask):
+        inputs = source_seq[:, -1:]
+        for i in range(self.target_len):
+            out = self.decode(inputs, source_mask, self.trg_masks[:,:i+1, :i+1])
+            out = torch.cat([inputs, out[:,-1:,:]], dim=-2)
+            inputs = out.detach()
+        outputs = inputs[:, 1:, :]
+        return outputs
+
+    def forward(self, X, source_mask=None):
+        self.trg_masks = self.trg_masks.type_as(X).bool()
+        source_seq = X[:, :self.input_len, :]
+        self.encode(source_seq, source_mask)
+        if self.training:
+            shifted_target_seq = X[:, self.input_len-1:-1, :]
+            outputs = self.decode(shifted_target_seq, source_mask, self.trg_masks)
+        else:
+            outputs = self.predict(source_seq, source_mask)
+        return outputs

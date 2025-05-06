@@ -11,8 +11,7 @@ from data_generation.square_sequences import generate_sequences
 # from data_generation.image_classification import generate_dataset 
 # from helpers import index_splitter, make_balanced_sampler 
 from stepbystep.v4 import StepByStep 
-from seq2seq import PositionalEncoding, subsequent_mask 
-# from seq2seq import PositionalEncoding, subsequent_mask, EncoderDecoderSelfAttn 
+from seq2seq import PositionalEncoding, subsequent_mask, EncoderDecoderSelfAttn
 from plots.chapter8 import *
 from plots.chapter9 import *
 from plots.chapter10 import *
@@ -232,4 +231,95 @@ layer_normalizer = nn.LayerNorm(256)
 dummy_normed = layer_normalizer(dummy_enc)
 print("Encoder normed: ", dummy_normed)
 fig = hist_layer_normed(dummy_enc, dummy_normed)
+plt.savefig('test.png')
+
+## Our Seq2Seq problem
+pe = PositionalEncoding(max_len=2, d_model=2)
+source_seq = torch.tensor([
+    [[1.0349, 0.9661],
+    [0.8055, -0.9169]]
+    ]) # [1,2,2]
+source_seq_enc = pe(source_seq)
+norm = nn.LayerNorm(2)
+# notice: normalize 2 vectors => -1 or 1 only => not good => must increase Dimension with Projection/Embeddings
+print("Norm of PE of Seq2Seq source:\n", norm(source_seq_enc))
+
+## Projections (for numerical values) or Embeddings (for categorical)
+torch.manual_seed(11)
+proj_dim = 6 
+linear_proj = nn.Linear(2, proj_dim)
+pe = PositionalEncoding(2, proj_dim)
+source_seq_proj = linear_proj(source_seq)
+source_seq_proj_enc = pe(source_seq_proj)
+norm = nn.LayerNorm(proj_dim)
+print("Norm of PE of 6D source seq:\n", norm(source_seq_proj_enc))
+
+class EncoderDecoderTransf(EncoderDecoderSelfAttn):
+    def __init__(self, encoder, decoder, input_len, target_len, n_features):
+        super(EncoderDecoderTransf, self).__init__(encoder, decoder, input_len, target_len)
+        self.n_features = n_features 
+        self.proj = nn.Linear(n_features, encoder.d_model)
+        self.linear = nn.Linear(encoder.d_model, n_features)
+    
+    def encode(self, source_seq, source_mask=None):
+        source_proj = self.proj(source_seq)
+        encoder_states = self.encoder(source_proj, source_mask)
+        self.decoder.init_keys(encoder_states)
+    
+    # during TRAINING
+    def decode(self, shifted_target_seq, source_mask=None, target_mask=None):
+        target_proj = self.proj(shifted_target_seq)
+        outputs = self.decoder(target_proj, source_mask=source_mask, target_mask=target_mask)
+        outputs = self.linear(outputs)
+        return outputs 
+
+## Data preparation
+points, directions = generate_sequences(n=256, seed=13)
+full_train = torch.as_tensor(np.array(points)).float()
+target_train = full_train[:, 2:]
+test_points, test_directions = generate_sequences(seed=19)
+full_test = torch.as_tensor(np.array(test_points)).float()
+source_test = full_test[:, :2]
+target_test = full_test[:, 2:]
+train_data = TensorDataset(full_train, target_train)
+test_data = TensorDataset(source_test, target_test)
+generator = torch.Generator()
+train_loader = DataLoader(train_data, batch_size=16, shuffle=True, generator=generator)
+test_loader = DataLoader(test_data, batch_size=16)
+
+fig = plot_data(points, directions, n_rows=1)
+plt.savefig('test.png')
+
+## Model configuration & training 
+torch.manual_seed(42)
+enclayer = EncoderLayer(n_heads=3, d_model=6, ff_units=10, dropout=0.1)
+declayer = DecoderLayer(n_heads=3, d_model=6, ff_units=10, dropout=0.1)
+enctransf = EncoderTransf(enclayer, n_layers=2)
+dectransf = DecoderTransf(declayer, n_layers=2)
+model_transf = EncoderDecoderTransf(
+    enctransf, dectransf, input_len=2, target_len=2, n_features=2
+)
+loss = nn.MSELoss()
+optimizer = torch.optim.Adam(model_transf.parameters(), lr=0.01)
+
+for p in model_transf.parameters():
+    if p.dim() > 1:
+        nn.init.xavier_uniform_(p)
+
+sbs_seq_transf = StepByStep(model_transf, loss, optimizer)
+sbs_seq_transf.set_loaders(train_loader, test_loader)
+sbs_seq_transf.train(50)
+fig = sbs_seq_transf.plot_losses()
+plt.savefig('test.png')
+
+## Train and val loss (we'll see val loss lower as training has dropout)
+torch.manual_seed(11)
+x, y = next(iter(train_loader))
+device = sbs_seq_transf.device 
+model_transf.train()
+print("Training loss:\n", loss(model_transf(x.to(device)), y.to(device)))
+model_transf.eval()
+print("Val loss:\n", loss(model_transf(x.to(device)), y.to(device)))
+
+fig = sequence_pred(sbs_seq_transf, full_test, test_directions)
 plt.savefig('test.png')
