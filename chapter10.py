@@ -552,3 +552,19 @@ fig = sbs_vit.plot_losses()
 plt.savefig('test.png')
 print("CLS token for classification:\n", model_vit.cls_token)
 print("Model Recall:\n", StepByStep.loader_apply(sbs_vit.val_loader, sbs_vit.correct))
+
+## Putting It All Together
+# Data preparation
+points, directions = generate_sequences(n=256, seed=13) # [256,4,2]
+full_train = torch.as_tensor(points).float() # [256,4,2]
+target_train = full_train[:, 2:] # [256,2,2]
+train_data = TensorDataset(full_train, target_train)
+generator = torch.Generator()
+train_loader = DataLoader(train_data, batch_size=16, shuffle=True, generator=generator)
+
+test_points, test_directions = generate_sequences(seed=19)
+full_test = torch.as_tensor(test_points).float()
+source_test = full_test[:, :2] # [256,2,2]
+target_test = full_test[:, 2:] # [256,2,2]
+test_data = TensorDataset(source_test, target_test)
+test_loader = DataLoader(test_data, batch_size=16)
