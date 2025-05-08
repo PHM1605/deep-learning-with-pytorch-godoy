@@ -8,8 +8,8 @@ from torch.utils.data import DataLoader, Dataset, random_split, TensorDataset
 from torchvision.transforms.v2 import Compose, Normalize, Pad 
 
 from data_generation.square_sequences import generate_sequences 
-# from data_generation.image_classification import generate_dataset 
-# from helpers import index_splitter, make_balanced_sampler 
+from data_generation.image_classification import generate_dataset 
+from helpers import index_splitter, make_balanced_sampler 
 from stepbystep.v4 import StepByStep 
 from seq2seq import PositionalEncoding, subsequent_mask, EncoderDecoderSelfAttn
 from plots.chapter8 import *
@@ -77,12 +77,12 @@ class MultiHeadedAttention(nn.Module):
         out = self.output_function(context) # [N,L,d_model]
         return out 
 
-# Try on dummy points
-dummy_points = torch.randn(16, 2, 4)
-mha = MultiHeadedAttention(n_heads=2, d_model=4, dropout=0.0)
-mha.init_keys(dummy_points)
-out = mha(dummy_points) 
-print("MultiHeadedAttention on dummy input: ", out.shape) #[16,2,4]
+# # Try on dummy points
+# dummy_points = torch.randn(16, 2, 4)
+# mha = MultiHeadedAttention(n_heads=2, d_model=4, dropout=0.0)
+# mha.init_keys(dummy_points)
+# out = mha(dummy_points) 
+# print("MultiHeadedAttention on dummy input: ", out.shape) #[16,2,4]
 
 # in PyTorch: nn.TransformerEncoderLayer
 class EncoderLayer(nn.Module):
@@ -198,61 +198,61 @@ class DecoderTransf(nn.Module):
             x = layer(x, source_mask, target_mask)
         return self.norm(x)
     
-## Layer Normalization - normalize rows i.e. mean and std over input-dimension-D
-d_model = 4
-seq_len = 2
-n_points = 3
-torch.manual_seed(34)
-data = torch.randn(n_points, seq_len, d_model)
-pe = PositionalEncoding(seq_len, d_model)
-inputs = pe(data) # [N,L,D]=[3,2,4]
-print("Inputs shape: ", inputs.shape)
-inputs_mean = inputs.mean(axis=2).unsqueeze(2)
-print("Inputs mean of every sample:\n", inputs_mean) # [N,L,1]
-inputs_var = inputs.var(axis=2, unbiased=False).unsqueeze(2)
-print("Inputs var of every sample:\n", inputs_var) # [N,L,1]
-print("Layer normalization manually:\n", (inputs-inputs_mean)/torch.sqrt(inputs_var+1e-5))
-# Layer Normalization using PyTorch built-in
-layer_norm = nn.LayerNorm(d_model)
-normalized = layer_norm(inputs)
-print("Layer normalization by library mean and std (1st sample only):\n", normalized[0][0].mean(), normalized[0][0].std(unbiased=False))
-# Notice: LayerNorm learnable weight and bias don't interfere with input; but do the normalization calculation as a pre-effect
-print("LayerNorm learnable weight and bias: ", layer_norm.state_dict())
+# ## Layer Normalization - normalize rows i.e. mean and std over input-dimension-D
+# d_model = 4
+# seq_len = 2
+# n_points = 3
+# torch.manual_seed(34)
+# data = torch.randn(n_points, seq_len, d_model)
+# pe = PositionalEncoding(seq_len, d_model)
+# inputs = pe(data) # [N,L,D]=[3,2,4]
+# print("Inputs shape: ", inputs.shape)
+# inputs_mean = inputs.mean(axis=2).unsqueeze(2)
+# print("Inputs mean of every sample:\n", inputs_mean) # [N,L,1]
+# inputs_var = inputs.var(axis=2, unbiased=False).unsqueeze(2)
+# print("Inputs var of every sample:\n", inputs_var) # [N,L,1]
+# print("Layer normalization manually:\n", (inputs-inputs_mean)/torch.sqrt(inputs_var+1e-5))
+# # Layer Normalization using PyTorch built-in
+# layer_norm = nn.LayerNorm(d_model)
+# normalized = layer_norm(inputs)
+# print("Layer normalization by library mean and std (1st sample only):\n", normalized[0][0].mean(), normalized[0][0].std(unbiased=False))
+# # Notice: LayerNorm learnable weight and bias don't interfere with input; but do the normalization calculation as a pre-effect
+# print("LayerNorm learnable weight and bias: ", layer_norm.state_dict())
 
-## Batch vs Layer
-torch.manual_seed(23)
-dummy_points = torch.randn(4,1,256)
-dummy_pe = PositionalEncoding(1,256)
-dummy_enc = dummy_pe(dummy_points) # [4,1,256]
-fig = hist_encoding(dummy_enc)
-plt.savefig('test.png')
+# ## Batch vs Layer
+# torch.manual_seed(23)
+# dummy_points = torch.randn(4,1,256)
+# dummy_pe = PositionalEncoding(1,256)
+# dummy_enc = dummy_pe(dummy_points) # [4,1,256]
+# fig = hist_encoding(dummy_enc)
+# plt.savefig('test.png')
 
-layer_normalizer = nn.LayerNorm(256)
-dummy_normed = layer_normalizer(dummy_enc)
-print("Encoder normed: ", dummy_normed)
-fig = hist_layer_normed(dummy_enc, dummy_normed)
-plt.savefig('test.png')
+# layer_normalizer = nn.LayerNorm(256)
+# dummy_normed = layer_normalizer(dummy_enc)
+# print("Encoder normed: ", dummy_normed)
+# fig = hist_layer_normed(dummy_enc, dummy_normed)
+# plt.savefig('test.png')
 
-## Our Seq2Seq problem
-pe = PositionalEncoding(max_len=2, d_model=2)
-source_seq = torch.tensor([
-    [[1.0349, 0.9661],
-    [0.8055, -0.9169]]
-    ]) # [1,2,2]
-source_seq_enc = pe(source_seq)
-norm = nn.LayerNorm(2)
-# notice: normalize 2 vectors => -1 or 1 only => not good => must increase Dimension with Projection/Embeddings
-print("Norm of PE of Seq2Seq source:\n", norm(source_seq_enc))
+# ## Our Seq2Seq problem
+# pe = PositionalEncoding(max_len=2, d_model=2)
+# source_seq = torch.tensor([
+#     [[1.0349, 0.9661],
+#     [0.8055, -0.9169]]
+#     ]) # [1,2,2]
+# source_seq_enc = pe(source_seq)
+# norm = nn.LayerNorm(2)
+# # notice: normalize 2 vectors => -1 or 1 only => not good => must increase Dimension with Projection/Embeddings
+# print("Norm of PE of Seq2Seq source:\n", norm(source_seq_enc))
 
-## Projections (for numerical values) or Embeddings (for categorical)
-torch.manual_seed(11)
-proj_dim = 6 
-linear_proj = nn.Linear(2, proj_dim)
-pe = PositionalEncoding(2, proj_dim)
-source_seq_proj = linear_proj(source_seq)
-source_seq_proj_enc = pe(source_seq_proj)
-norm = nn.LayerNorm(proj_dim)
-print("Norm of PE of 6D source seq:\n", norm(source_seq_proj_enc))
+# ## Projections (for numerical values) or Embeddings (for categorical)
+# torch.manual_seed(11)
+# proj_dim = 6 
+# linear_proj = nn.Linear(2, proj_dim)
+# pe = PositionalEncoding(2, proj_dim)
+# source_seq_proj = linear_proj(source_seq)
+# source_seq_proj_enc = pe(source_seq_proj)
+# norm = nn.LayerNorm(proj_dim)
+# print("Norm of PE of 6D source seq:\n", norm(source_seq_proj_enc))
 
 class EncoderDecoderTransf(EncoderDecoderSelfAttn):
     def __init__(self, encoder, decoder, input_len, target_len, n_features):
@@ -273,53 +273,227 @@ class EncoderDecoderTransf(EncoderDecoderSelfAttn):
         outputs = self.linear(outputs)
         return outputs 
 
-## Data preparation
-points, directions = generate_sequences(n=256, seed=13)
-full_train = torch.as_tensor(np.array(points)).float()
-target_train = full_train[:, 2:]
-test_points, test_directions = generate_sequences(seed=19)
-full_test = torch.as_tensor(np.array(test_points)).float()
-source_test = full_test[:, :2]
-target_test = full_test[:, 2:]
-train_data = TensorDataset(full_train, target_train)
-test_data = TensorDataset(source_test, target_test)
-generator = torch.Generator()
-train_loader = DataLoader(train_data, batch_size=16, shuffle=True, generator=generator)
-test_loader = DataLoader(test_data, batch_size=16)
+# ## Data preparation
+# points, directions = generate_sequences(n=256, seed=13)
+# full_train = torch.as_tensor(np.array(points)).float()
+# target_train = full_train[:, 2:]
+# test_points, test_directions = generate_sequences(seed=19)
+# full_test = torch.as_tensor(np.array(test_points)).float()
+# source_test = full_test[:, :2]
+# target_test = full_test[:, 2:]
+# train_data = TensorDataset(full_train, target_train)
+# test_data = TensorDataset(source_test, target_test)
+# generator = torch.Generator()
+# train_loader = DataLoader(train_data, batch_size=16, shuffle=True, generator=generator)
+# test_loader = DataLoader(test_data, batch_size=16)
 
-fig = plot_data(points, directions, n_rows=1)
+# fig = plot_data(points, directions, n_rows=1)
+# plt.savefig('test.png')
+
+# ## Model configuration & training 
+# torch.manual_seed(42)
+# enclayer = EncoderLayer(n_heads=3, d_model=6, ff_units=10, dropout=0.1)
+# declayer = DecoderLayer(n_heads=3, d_model=6, ff_units=10, dropout=0.1)
+# enctransf = EncoderTransf(enclayer, n_layers=2)
+# dectransf = DecoderTransf(declayer, n_layers=2)
+# model_transf = EncoderDecoderTransf(
+#     enctransf, dectransf, input_len=2, target_len=2, n_features=2
+# )
+# loss = nn.MSELoss()
+# optimizer = torch.optim.Adam(model_transf.parameters(), lr=0.01)
+
+# for p in model_transf.parameters():
+#     if p.dim() > 1:
+#         nn.init.xavier_uniform_(p)
+
+# sbs_seq_transf = StepByStep(model_transf, loss, optimizer)
+# sbs_seq_transf.set_loaders(train_loader, test_loader)
+# sbs_seq_transf.train(50)
+# fig = sbs_seq_transf.plot_losses()
+# plt.savefig('test.png')
+
+# ## Train and val loss (we'll see val loss lower as training has dropout)
+# torch.manual_seed(11)
+# x, y = next(iter(train_loader))
+# device = sbs_seq_transf.device 
+# model_transf.train()
+# print("Training loss:\n", loss(model_transf(x.to(device)), y.to(device)))
+# model_transf.eval()
+# print("Val loss:\n", loss(model_transf(x.to(device)), y.to(device)))
+
+# fig = sequence_pred(sbs_seq_transf, full_test, test_directions)
+# plt.savefig('test.png')
+
+## PyTorch Transformer model
+class TransformerModel(nn.Module):
+    def __init__(self, transformer, input_len, target_len, n_features):
+        super().__init__()
+        self.transf = transformer 
+        self.input_len = input_len 
+        self.target_len = target_len 
+        self.trg_masks = self.transf.generate_square_subsequent_mask(self.target_len)
+        self.n_features = n_features 
+        self.proj = nn.Linear(n_features, self.transf.d_model) # at input 
+        self.linear = nn.Linear(self.transf.d_model, n_features) # at target
+        max_len = max(self.input_len, self.target_len)
+        self.pe = PositionalEncoding(max_len, self.transf.d_model)
+        self.norm = nn.LayerNorm(self.transf.d_model)
+    
+    def preprocess(self, seq):
+        seq_proj = self.proj(seq)
+        seq_enc = self.pe(seq_proj)
+        return self.norm(seq_enc)
+    
+    # during TRAIN
+    def encode_decode(self, source, target, source_mask=None, target_mask=None):
+        # Projections
+        src = self.preprocess(source)
+        tgt = self.preprocess(target)
+        out = self.transf(src, tgt, src_key_padding_mask=source_mask, tgt_mask=target_mask)
+        out = self.linear(out) # [N,L,F]
+        return out 
+    
+    # during VAL/TEST
+    def predict(self, source_seq, source_mask=None):
+        inputs = source_seq[:, -1:]
+        for i in range(self.target_len):
+            out = self.encode_decode(
+                source_seq, inputs, source_mask=source_mask, target_mask=self.trg_masks[:i+1,:i+1]
+                )
+            out = torch.cat([inputs, out[:,-1:, :]], dim=-2)
+            inputs = out.detach()
+        outputs = out[:,1:,:]
+        return outputs 
+    
+    def forward(self, X, source_mask=None):
+        self.trg_masks= self.trg_masks.type_as(X)
+        source_seq = X[:,:self.input_len,:]
+        if self.training:
+            shifted_target_seq = X[:, self.input_len-1:-1, :]
+            outputs = self.encode_decode(
+                source_seq, shifted_target_seq, source_mask=source_mask, target_mask=self.trg_masks
+            )
+        else:
+            outputs = self.predict(source_seq, source_mask)
+        return outputs 
+
+# torch.manual_seed(42)
+# transformer = nn.Transformer(
+#     d_model=6,
+#     nhead=3,
+#     num_encoder_layers=1,
+#     num_decoder_layers=1,
+#     dim_feedforward=20,
+#     dropout = 0.1,
+#     batch_first = True
+# )
+# model_transformer = TransformerModel(transformer, input_len=2, target_len=2, n_features=2)
+# loss = nn.MSELoss()
+# optimizer = torch.optim.Adam(model_transformer.parameters(), lr=0.01)
+# # Weight init
+# for p in model_transformer.parameters():
+#     if p.dim() > 1:
+#         nn.init.xavier_uniform_(p)
+
+# sbs_seq_transformer = StepByStep(
+#     model_transformer, loss, optimizer
+# )
+# sbs_seq_transformer.set_loaders(train_loader, test_loader)
+# sbs_seq_transformer.train(50)
+# fig = sbs_seq_transformer.plot_losses()
+# plt.savefig('test.png')
+
+## Vision Transformer 
+# Data generation & preparation
+images, labels = generate_dataset(img_size=12, n_images=1000, binary=False, seed=17) # [1000,1,12,12]
+img = torch.as_tensor(images[2]).unsqueeze(0).float()/255 # [num_images, color_channel, height, width] = [1,1,12,12]
+fig = plot_images(img, title=False)
 plt.savefig('test.png')
 
-## Model configuration & training 
-torch.manual_seed(42)
-enclayer = EncoderLayer(n_heads=3, d_model=6, ff_units=10, dropout=0.1)
-declayer = DecoderLayer(n_heads=3, d_model=6, ff_units=10, dropout=0.1)
-enctransf = EncoderTransf(enclayer, n_layers=2)
-dectransf = DecoderTransf(declayer, n_layers=2)
-model_transf = EncoderDecoderTransf(
-    enctransf, dectransf, input_len=2, target_len=2, n_features=2
+class TransformedTensorDataset(Dataset):
+    def __init__(self, x, y, transform=None):
+        self.x = x 
+        self.y = y 
+        self.transform = transform 
+    
+    def __getitem__(self, index):
+        x = self.x[index]
+        if self.transform:
+            x = self.transform(x)
+        return x, self.y[index]
+    
+    def __len__(self):
+        return len(self.x)
+
+x_tensor = torch.as_tensor(images/255).float()
+y_tensor = torch.as_tensor(labels).long()
+train_idx, val_idx = index_splitter(len(x_tensor), [80, 20])
+x_train_tensor = x_tensor[train_idx]
+y_train_tensor = y_tensor[train_idx]
+x_val_tensor = x_tensor[val_idx]
+y_val_tensor = y_tensor[val_idx]
+train_composer = Compose([Normalize(mean=(0.5,), std=(0.5,))])
+val_composer = Compose([Normalize(mean=(0.5,), std=(0.5,))])
+train_dataset = TransformedTensorDataset(
+    x_train_tensor, y_train_tensor, transform=train_composer
 )
-loss = nn.MSELoss()
-optimizer = torch.optim.Adam(model_transf.parameters(), lr=0.01)
+val_dataset = TransformedTensorDataset(
+    x_val_tensor, y_val_tensor, transform=val_composer 
+)
+sampler = make_balanced_sampler(y_train_tensor)
+train_loader = DataLoader(
+    dataset = train_dataset, batch_size=16, sampler=sampler 
+)
+val_loader = DataLoader(
+    dataset=val_dataset, batch_size=16
+)
 
-for p in model_transf.parameters():
-    if p.dim() > 1:
-        nn.init.xavier_uniform_(p)
+def extract_image_patches(x, kernel_size, stride=1):
+    patches = x.unfold(2, kernel_size, stride) # [1,1,12,12]=>[1,1,3,4,12]
+    patches = patches.unfold(3, kernel_size, stride) # [1,1,3,4,12]=>[1,1,3,3,4,4] with [3,3]=[num_vertical_patches,num_horizontal_patches]
+    patches = patches.permute(0,2,3,1,4,5).contiguous() # [num_images,num_vertical,num_horizontal,num_channels,patch_height,patch_width]
+    return patches.view(x.shape[0], patches.shape[1], patches.shape[2], -1) # [num_images,num_vertical,num_horizontal,num_elements_in_kernel]=[1,3,3,16]
 
-sbs_seq_transf = StepByStep(model_transf, loss, optimizer)
-sbs_seq_transf.set_loaders(train_loader, test_loader)
-sbs_seq_transf.train(50)
-fig = sbs_seq_transf.plot_losses()
+kernel_size = 4
+# img = [num_images,color_channel,height,width] = [1,1,12,12]
+patches = extract_image_patches(
+    img, kernel_size, stride=kernel_size
+)
+print("Patches shape:\n", patches.shape) # [1,3,3,16]
+fig = plot_patches(patches, kernel_size=kernel_size)
 plt.savefig('test.png')
 
-## Train and val loss (we'll see val loss lower as training has dropout)
-torch.manual_seed(11)
-x, y = next(iter(train_loader))
-device = sbs_seq_transf.device 
-model_transf.train()
-print("Training loss:\n", loss(model_transf(x.to(device)), y.to(device)))
-model_transf.eval()
-print("Val loss:\n", loss(model_transf(x.to(device)), y.to(device)))
+seq_patches = patches.view(-1, patches.size(-1)) # [9,16]
+fig = plot_seq_patches(seq_patches)
+plt.savefig('test.png')
 
-fig = sequence_pred(sbs_seq_transf, full_test, test_directions)
+class PatchEmbed(nn.Module):
+    # assuming image has height=width=224
+    def __init__(self, img_size=224, patch_size=16, in_channels=3, embed_dim=768, dilation=1):
+        super().__init__()
+        num_patches = (img_size//patch_size) * (img_size//patch_size)
+        self.img_size = img_size 
+        self.patch_size = patch_size 
+        self.num_patches = num_patches 
+        self.proj = nn.Conv2d(in_channels, embed_dim, kernel_size=patch_size, stride=patch_size)
+    
+    # x:[num_images,channels,height,width]=[1,1,12,12]=>proj:[1,16,3,3]=>flatten:[1,16,9]=>transpose:[1,9,16]
+    def forward(self, x):
+        x = self.proj(x).flatten(2).transpose(1,2)
+        return x 
+
+torch.manual_seed(13)
+patch_embed = PatchEmbed(
+    img.size(-1), patch_size=kernel_size, in_channels=1, embed_dim=kernel_size**2
+)
+embedded = patch_embed(img) # [1,9,16]
+fig = plot_seq_patches(embedded[0])
+plt.savefig('test.png')
+
+## Special Classifier Token [CLS]
+imgs = torch.as_tensor(images[2:4]).float() / 255.
+fig = plot_images(imgs)
+plt.savefig('test.png')
+embeddeds = patch_embed(imgs) # [2,9,16]
+fig = plot_seq_patches_transp(embeddeds, add_cls=False, title='Image / Sequence')
 plt.savefig('test.png')
