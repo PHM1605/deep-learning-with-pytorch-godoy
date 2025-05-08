@@ -90,10 +90,29 @@ def plot_seq_patches_transp(seq_patches, add_cls=False, title=None):
     
     for seq_n in range(n):
         axs = saxs[:, seq_n]
+        if add_cls:
+            # sub_patches: [10,16]
+            sub_patches = np.concatenate([
+                np.zeros_like(seq_patches[seq_n,:1]), # [1,16] 
+                seq_patches[seq_n] # [9,16]
+            ])
+        else:
+            sub_patches = seq_patches[seq_n] # [9,16]
+
         # title of the left/right image
         axs[0].text(4,1, f'{title} #{seq_n}', fontsize=16)
         axs[0].grid(False)
         axs[0].set_yticks([])
+
+        for i in range(sub_patches.shape[0]):
+            label = i 
+            if add_cls:
+                label = i-1 if i>0 else '[CLS]'
+            axs[i+1].imshow(sub_patches[i].reshape(1,-1), cmap=plt.cm.gray)
+            axs[i+1].set_yticks([0])
+            axs[i+1].set_yticklabels([label], rotation=0)
+            axs[i+1].grid(False)            
+
         axs[-1].set_xlabel('Features') # xlabel on the last row of left/right image
     fig.tight_layout()
     return fig

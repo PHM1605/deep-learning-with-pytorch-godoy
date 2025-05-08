@@ -64,3 +64,66 @@ class EncoderDecoderSelfAttn(nn.Module):
         else:
             outputs = self.predict(source_seq, source_mask)
         return outputs
+
+class SubLayerWrapper(nn.Module):
+    def __init__(self, d_model, dropout):
+        super().__init__() 
+        self.norm = nn.LayerNorm(d_model)
+        self.drop = nn.Dropout(dropout)
+    
+    def forward(self, x, sublayer, is_self_attn=False, **kwargs):
+        norm_x = self.norm(x) 
+        if is_self_attn:
+            sublayer.init_keys(norm_x)
+        out = x + self.drop(sublayer(norm_x, **kwargs))
+        return out 
+
+class EncoderLayer(nn.Module):
+    def __init__(self, n_heads, d_model, ff_units, dropout=0.1):
+        super().__init__()
+        self.n_heads = n_heads 
+        self.d_model = d_model 
+        self.ff_units = ff_units 
+        self.self_attn_heads = MultiHeadedAttention(
+            n_heads, d_model, dropout=dropout)
+        self.ffn = nn.Sequential(
+            nn.Linear(d_model, ff_units), 
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(ff_units, d_model)
+        )
+        self.sublayers = nn.ModuleList([
+            SubLayerWrapper(d_model, dropout)
+            for _ in range(2)
+        ])
+    
+    def forward(self, query, mask=None):
+        # SubLayer 0 - Self-Attention
+        att = self.sublayers[0](
+            query,
+            sublayer = self.self_attn_heads,
+            is_self_attn=True,
+            mask=mask  
+        )
+        # SubLayer 1 - FFN
+        out = self.sublayers[1](
+            att, sublayer=self.ffn
+        )
+        return out 
+
+class EncoderTransf(nn.Module):
+    def __init__(self, encoder_layer, n_layers=1, max_len=100):
+        super().__init__()
+        self.d_model = encoder.d_model 
+        self.pe = PositionalEncoding(max_len, self.d_model)
+        self.norm = nn.LayerNorm(self.d_model)
+        self.layers = nn.Modulelist([
+            copy.deepcopy(encoder_layer)
+            for _ in range(n_layers)
+        ])
+    
+    def forward(self, query, mask=None):
+        x = self.pe(query)
+        for layer in self.layers:
+            x = layer(x, mask)
+        return self.norm(x)

@@ -497,3 +497,58 @@ plt.savefig('test.png')
 embeddeds = patch_embed(imgs) # [2,9,16]
 fig = plot_seq_patches_transp(embeddeds, add_cls=False, title='Image / Sequence')
 plt.savefig('test.png')
+fig = plot_seq_patches_transp(embeddeds, add_cls=True, title='Image / Sequence')
+plt.savefig('test.png')
+cls_token = nn.Parameter(torch.zeros(1,1,16))
+# Fetch a batch, embed and add cls
+images, labels = next(iter(train_loader)) # images: [16,1,12,12]
+embed = patch_embed(images) # [16,9,16]
+cls_tokens = cls_token.expand(embed.size(0),-1,-1) # replicate [1,1,16]=>[16,1,16] (-1 means keeping this dim unchanged)
+embed_cls = torch.cat((cls_tokens, embed), dim=1) # [16,1,16]&[16,9,16]=>[16,10,16]
+
+class ViT(nn.Module):
+    def __init__(self, encoder, img_size, in_channels, patch_size, n_outputs):
+        super().__init__()
+        # Note: d_model must be patch_size*patch_size in VisionTransformer
+        self.d_model = encoder.d_model 
+        self.n_outputs = n_outputs 
+        self.cls_token = nn.Parameter(
+            torch.zeros(1,1,encoder.d_model)
+        )
+        self.embed = PatchEmbed(img_size, patch_size, in_channels, encoder.d_model)
+        self.encoder = encoder
+        self.mlp = nn.Linear(encoder.d_model, n_outputs)
+        
+    def preprocess(self, X):
+        # [N,C,H,W]->[N,num_patches,patch_size*patch_size]
+        src = self.embed(X) 
+        # [1,1,D]->[N,1,D]
+        cls_tokens = self.cls_token.expand(X.size(0), -1, -1)
+        src = torch.cat((cls_tokens, src), dim=1) # [N,num_patches+1,patch_size**2]
+        return src 
+    
+    def encode(self, source):
+        states = self.encoder(source)
+        # state from the 1st token is used to classify
+        cls_state = states[:, 0] # [N,1,D]
+        return cls_state 
+    
+    def forward(self, X):
+        src = self.preprocess(X)
+        cls_state = self.encode(src)
+        out = self.mlp(cls_state) # [N,1,outputs]
+        return out 
+
+torch.manual_seed(17)
+layer = EncoderLayer(n_heads=2, d_model=16, ff_units=20)
+encoder = EncoderTransf(layer, n_layers=1)
+model_vit = ViT(encoder, img_size=12, in_channels=1, patch_size=4, n_outputs=3)
+multi_loss_fn = nn.CrossEntropyLoss()
+optimizer_vit = optim.Adam(model_vit.parameters(), lr=1e-3)
+sbs_vit = StepByStep(model_vit, multi_loss_fn, optimizer_vit)
+sbs_vit.set_loaders(train_loader, val_loader)
+sbs_vit.train(20)
+fig = sbs_vit.plot_losses()
+plt.savefig('test.png')
+print("CLS token for classification:\n", model_vit.cls_token)
+print("Model Recall:\n", StepByStep.loader_apply(sbs_vit.val_loader, sbs_vit.correct))
