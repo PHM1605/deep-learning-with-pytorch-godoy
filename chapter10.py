@@ -11,7 +11,7 @@ from data_generation.square_sequences import generate_sequences
 from data_generation.image_classification import generate_dataset 
 from helpers import index_splitter, make_balanced_sampler 
 from stepbystep.v4 import StepByStep 
-from seq2seq import PositionalEncoding, subsequent_mask, EncoderDecoderSelfAttn
+from seq2seq import PositionalEncoding, subsequent_mask, EncoderDecoderSelfAttn, EncoderLayer
 from plots.chapter8 import *
 from plots.chapter9 import *
 from plots.chapter10 import *
@@ -84,119 +84,121 @@ class MultiHeadedAttention(nn.Module):
 # out = mha(dummy_points) 
 # print("MultiHeadedAttention on dummy input: ", out.shape) #[16,2,4]
 
-# in PyTorch: nn.TransformerEncoderLayer
-class EncoderLayer(nn.Module):
-    def __init__(self, n_heads, d_model, ff_units, dropout=0.1):
-        super().__init__()
-        self.n_heads = n_heads
-        self.d_model = d_model # is the multiple of #heads
-        self.ff_units = ff_units 
-        self.self_attn_heads = MultiHeadedAttention(n_heads, d_model, dropout)
-        self.ffn = nn.Sequential(
-            nn.Linear(d_model, ff_units),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(ff_units, d_model)
-        )
-        # Batch Normalization: normalize features; Layer Normalization: normalize data points 
-        self.norm1 = nn.LayerNorm(d_model)
-        self.norm2 = nn.LayerNorm(d_model)
-        self.drop1 = nn.Dropout(dropout)
-        self.drop2 = nn.Dropout(dropout)
+# # in PyTorch: nn.TransformerEncoderLayer
+# class EncoderLayer(nn.Module):
+#     def __init__(self, n_heads, d_model, ff_units, dropout=0.1):
+#         super().__init__()
+#         self.n_heads = n_heads
+#         self.d_model = d_model # is the multiple of #heads
+#         self.ff_units = ff_units 
+#         self.self_attn_heads = MultiHeadedAttention(n_heads, d_model, dropout)
+#         self.ffn = nn.Sequential(
+#             nn.Linear(d_model, ff_units),
+#             nn.ReLU(),
+#             nn.Dropout(dropout),
+#             nn.Linear(ff_units, d_model)
+#         )
+#         # Batch Normalization: normalize features; Layer Normalization: normalize data points 
+#         self.norm1 = nn.LayerNorm(d_model)
+#         self.norm2 = nn.LayerNorm(d_model)
+#         self.drop1 = nn.Dropout(dropout)
+#         self.drop2 = nn.Dropout(dropout)
     
-    def forward(self, query, mask=None):
-        # Sublayer #0 - Norm first
-        norm_query = self.norm1(query)
-        self.self_attn_heads.init_keys(norm_query)
-        states = self.self_attn_heads(norm_query, mask)
-        att = query + self.drop1(states)
-        # Sublayer #1 - Norm first 
-        norm_att = self.norm2(att)
-        out = self.ffn(norm_att)
-        out = att + self.drop2(out)
-        return out 
+#     def forward(self, query, mask=None):
+#         # Sublayer #0 - Norm first
+#         norm_query = self.norm1(query)
+#         self.self_attn_heads.init_keys(norm_query)
+#         states = self.self_attn_heads(norm_query, mask)
+#         att = query + self.drop1(states)
+#         # Sublayer #1 - Norm first 
+#         norm_att = self.norm2(att)
+#         out = self.ffn(norm_att)
+#         out = att + self.drop2(out)
+#         return out 
 
-# in PyTorch: nn.TransformerEncoder 
-class EncoderTransf(nn.Module):
-    # max_len: for PositionalEncoding
-    def __init__(self, encoder_layer, n_layers=1, max_len=100):
-        super().__init__()
-        self.d_model = encoder_layer.d_model 
-        self.pe = PositionalEncoding(max_len, self.d_model)
-        self.norm = nn.LayerNorm(self.d_model) # final normalization at the end 
-        self.layers = nn.ModuleList([
-            copy.deepcopy(encoder_layer)
-            for _ in range(n_layers)
-        ])
+# # in PyTorch: nn.TransformerEncoder 
+# # norm-first for each sublayer
+# class EncoderTransf(nn.Module):
+#     # max_len: for PositionalEncoding
+#     def __init__(self, encoder_layer, n_layers=1, max_len=100):
+#         super().__init__()
+#         self.d_model = encoder_layer.d_model 
+#         self.pe = PositionalEncoding(max_len, self.d_model)
+#         self.norm = nn.LayerNorm(self.d_model) # final normalization at the end 
+#         self.layers = nn.ModuleList([
+#             copy.deepcopy(encoder_layer)
+#             for _ in range(n_layers)
+#         ])
 
-    def forward(self, query, mask=None):
-        x = self.pe(query)
-        for layer in self.layers:
-            x = layer(x, mask)
-        return self.norm(x)
+#     def forward(self, query, mask=None):
+#         x = self.pe(query)
+#         for layer in self.layers:
+#             x = layer(x, mask)
+#         return self.norm(x)
 
-# in PyTorch: nn.TransformerDecoderLayer 
-class DecoderLayer(nn.Module):
-    def __init__(self, n_heads, d_model, ff_units, dropout=0.1):
-        super().__init__()
-        self.n_heads = n_heads 
-        self.d_model = d_model
-        self.ff_units = ff_units 
-        self.self_attn_heads = MultiHeadedAttention(n_heads, d_model, dropout)
-        self.cross_attn_heads = MultiHeadedAttention(n_heads, d_model, dropout)
-        self.ffn = nn.Sequential(
-            nn.Linear(d_model, ff_units),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(ff_units, d_model)
-        )
-        self.norm1 = nn.LayerNorm(d_model)
-        self.norm2 = nn.LayerNorm(d_model)
-        self.norm3 = nn.LayerNorm(d_model)
-        self.drop1 = nn.Dropout(dropout)
-        self.drop2 = nn.Dropout(dropout)
-        self.drop3 = nn.Dropout(dropout)
+# # in PyTorch: nn.TransformerDecoderLayer 
+# # norm-first for each sublayer
+# class DecoderLayer(nn.Module):
+#     def __init__(self, n_heads, d_model, ff_units, dropout=0.1):
+#         super().__init__()
+#         self.n_heads = n_heads 
+#         self.d_model = d_model
+#         self.ff_units = ff_units 
+#         self.self_attn_heads = MultiHeadedAttention(n_heads, d_model, dropout)
+#         self.cross_attn_heads = MultiHeadedAttention(n_heads, d_model, dropout)
+#         self.ffn = nn.Sequential(
+#             nn.Linear(d_model, ff_units),
+#             nn.ReLU(),
+#             nn.Dropout(dropout),
+#             nn.Linear(ff_units, d_model)
+#         )
+#         self.norm1 = nn.LayerNorm(d_model)
+#         self.norm2 = nn.LayerNorm(d_model)
+#         self.norm3 = nn.LayerNorm(d_model)
+#         self.drop1 = nn.Dropout(dropout)
+#         self.drop2 = nn.Dropout(dropout)
+#         self.drop3 = nn.Dropout(dropout)
     
-    def init_keys(self, states):
-        self.cross_attn_heads.init_keys(states)
+#     def init_keys(self, states):
+#         self.cross_attn_heads.init_keys(states)
     
-    def forward(self, query, source_mask=None, target_mask=None):
-        # Sublayer #0 - Norm-first
-        norm_query = self.norm1(query)
-        self.self_attn_heads.init_keys(norm_query)
-        states = self.self_attn_heads(norm_query, target_mask)
-        att1 = query + self.drop1(states)
-        # Sublayer #1 - Norm-first
-        norm_att1 = self.norm2(att1)
-        encoder_states = self.cross_attn_heads(norm_att1, source_mask)
-        att2 = att1 + self.drop2(encoder_states)
-        # Sublayer #2 - Norm-first
-        norm_att2 = self.norm3(att2)
-        out = self.ffn(norm_att2)
-        out = att2 + self.drop3(out)
-        return out 
+#     def forward(self, query, source_mask=None, target_mask=None):
+#         # Sublayer #0 - Norm-first
+#         norm_query = self.norm1(query)
+#         self.self_attn_heads.init_keys(norm_query)
+#         states = self.self_attn_heads(norm_query, target_mask)
+#         att1 = query + self.drop1(states)
+#         # Sublayer #1 - Norm-first
+#         norm_att1 = self.norm2(att1)
+#         encoder_states = self.cross_attn_heads(norm_att1, source_mask)
+#         att2 = att1 + self.drop2(encoder_states)
+#         # Sublayer #2 - Norm-first
+#         norm_att2 = self.norm3(att2)
+#         out = self.ffn(norm_att2)
+#         out = att2 + self.drop3(out)
+#         return out 
 
-# in PyTorch: nn.TransformerDecoder 
-class DecoderTransf(nn.Module):
-    def __init__(self, decoder_layer, n_layers=1, max_len=100):
-        super(DecoderTransf, self).__init__()
-        self.d_model = decoder_layer.d_model 
-        self.pe = PositionalEncoding(max_len, self.d_model)
-        self.norm = nn.LayerNorm(self.d_model)
-        self.layers = nn.ModuleList([
-            copy.deepcopy(decoder_layer)
-            for _ in range(n_layers)
-        ])
+# # in PyTorch: nn.TransformerDecoder 
+# class DecoderTransf(nn.Module):
+#     def __init__(self, decoder_layer, n_layers=1, max_len=100):
+#         super(DecoderTransf, self).__init__()
+#         self.d_model = decoder_layer.d_model 
+#         self.pe = PositionalEncoding(max_len, self.d_model)
+#         self.norm = nn.LayerNorm(self.d_model) # at output
+#         self.layers = nn.ModuleList([
+#             copy.deepcopy(decoder_layer)
+#             for _ in range(n_layers)
+#         ])
     
-    def init_keys(self, states):
-        for layer in self.layers:
-            layer.init_keys(states)
+#     def init_keys(self, states):
+#         for layer in self.layers:
+#             layer.init_keys(states)
     
-    def forward(self, query, source_mask=None, target_mask=None):
-        x = self.pe(query)
-        for layer in self.layers:
-            x = layer(x, source_mask, target_mask)
-        return self.norm(x)
+#     def forward(self, query, source_mask=None, target_mask=None):
+#         x = self.pe(query)
+#         for layer in self.layers:
+#             x = layer(x, source_mask, target_mask)
+#         return self.norm(x)
     
 # ## Layer Normalization - normalize rows i.e. mean and std over input-dimension-D
 # d_model = 4
@@ -403,12 +405,12 @@ class TransformerModel(nn.Module):
 # fig = sbs_seq_transformer.plot_losses()
 # plt.savefig('test.png')
 
-## Vision Transformer 
-# Data generation & preparation
-images, labels = generate_dataset(img_size=12, n_images=1000, binary=False, seed=17) # [1000,1,12,12]
-img = torch.as_tensor(images[2]).unsqueeze(0).float()/255 # [num_images, color_channel, height, width] = [1,1,12,12]
-fig = plot_images(img, title=False)
-plt.savefig('test.png')
+# ## Vision Transformer 
+# # Data generation & preparation
+# images, labels = generate_dataset(img_size=12, n_images=1000, binary=False, seed=17) # [1000,1,12,12]
+# img = torch.as_tensor(images[2]).unsqueeze(0).float()/255 # [num_images, color_channel, height, width] = [1,1,12,12]
+# fig = plot_images(img, title=False)
+# plt.savefig('test.png')
 
 class TransformedTensorDataset(Dataset):
     def __init__(self, x, y, transform=None):
@@ -425,28 +427,28 @@ class TransformedTensorDataset(Dataset):
     def __len__(self):
         return len(self.x)
 
-x_tensor = torch.as_tensor(images/255).float()
-y_tensor = torch.as_tensor(labels).long()
-train_idx, val_idx = index_splitter(len(x_tensor), [80, 20])
-x_train_tensor = x_tensor[train_idx]
-y_train_tensor = y_tensor[train_idx]
-x_val_tensor = x_tensor[val_idx]
-y_val_tensor = y_tensor[val_idx]
-train_composer = Compose([Normalize(mean=(0.5,), std=(0.5,))])
-val_composer = Compose([Normalize(mean=(0.5,), std=(0.5,))])
-train_dataset = TransformedTensorDataset(
-    x_train_tensor, y_train_tensor, transform=train_composer
-)
-val_dataset = TransformedTensorDataset(
-    x_val_tensor, y_val_tensor, transform=val_composer 
-)
-sampler = make_balanced_sampler(y_train_tensor)
-train_loader = DataLoader(
-    dataset = train_dataset, batch_size=16, sampler=sampler 
-)
-val_loader = DataLoader(
-    dataset=val_dataset, batch_size=16
-)
+# x_tensor = torch.as_tensor(images/255).float()
+# y_tensor = torch.as_tensor(labels).long()
+# train_idx, val_idx = index_splitter(len(x_tensor), [80, 20])
+# x_train_tensor = x_tensor[train_idx]
+# y_train_tensor = y_tensor[train_idx]
+# x_val_tensor = x_tensor[val_idx]
+# y_val_tensor = y_tensor[val_idx]
+# train_composer = Compose([Normalize(mean=(0.5,), std=(0.5,))])
+# val_composer = Compose([Normalize(mean=(0.5,), std=(0.5,))])
+# train_dataset = TransformedTensorDataset(
+#     x_train_tensor, y_train_tensor, transform=train_composer
+# )
+# val_dataset = TransformedTensorDataset(
+#     x_val_tensor, y_val_tensor, transform=val_composer 
+# )
+# sampler = make_balanced_sampler(y_train_tensor)
+# train_loader = DataLoader(
+#     dataset = train_dataset, batch_size=16, sampler=sampler 
+# )
+# val_loader = DataLoader(
+#     dataset=val_dataset, batch_size=16
+# )
 
 def extract_image_patches(x, kernel_size, stride=1):
     patches = x.unfold(2, kernel_size, stride) # [1,1,12,12]=>[1,1,3,4,12]
@@ -454,18 +456,18 @@ def extract_image_patches(x, kernel_size, stride=1):
     patches = patches.permute(0,2,3,1,4,5).contiguous() # [num_images,num_vertical,num_horizontal,num_channels,patch_height,patch_width]
     return patches.view(x.shape[0], patches.shape[1], patches.shape[2], -1) # [num_images,num_vertical,num_horizontal,num_elements_in_kernel]=[1,3,3,16]
 
-kernel_size = 4
-# img = [num_images,color_channel,height,width] = [1,1,12,12]
-patches = extract_image_patches(
-    img, kernel_size, stride=kernel_size
-)
-print("Patches shape:\n", patches.shape) # [1,3,3,16]
-fig = plot_patches(patches, kernel_size=kernel_size)
-plt.savefig('test.png')
+# kernel_size = 4
+# # img = [num_images,color_channel,height,width] = [1,1,12,12]
+# patches = extract_image_patches(
+#     img, kernel_size, stride=kernel_size
+# )
+# print("Patches shape:\n", patches.shape) # [1,3,3,16]
+# fig = plot_patches(patches, kernel_size=kernel_size)
+# plt.savefig('test.png')
 
-seq_patches = patches.view(-1, patches.size(-1)) # [9,16]
-fig = plot_seq_patches(seq_patches)
-plt.savefig('test.png')
+# seq_patches = patches.view(-1, patches.size(-1)) # [9,16]
+# fig = plot_seq_patches(seq_patches)
+# plt.savefig('test.png')
 
 class PatchEmbed(nn.Module):
     # assuming image has height=width=224
@@ -482,29 +484,29 @@ class PatchEmbed(nn.Module):
         x = self.proj(x).flatten(2).transpose(1,2)
         return x 
 
-torch.manual_seed(13)
-patch_embed = PatchEmbed(
-    img.size(-1), patch_size=kernel_size, in_channels=1, embed_dim=kernel_size**2
-)
-embedded = patch_embed(img) # [1,9,16]
-fig = plot_seq_patches(embedded[0])
-plt.savefig('test.png')
+# torch.manual_seed(13)
+# patch_embed = PatchEmbed(
+#     img.size(-1), patch_size=kernel_size, in_channels=1, embed_dim=kernel_size**2
+# )
+# embedded = patch_embed(img) # [1,9,16]
+# fig = plot_seq_patches(embedded[0])
+# plt.savefig('test.png')
 
-## Special Classifier Token [CLS]
-imgs = torch.as_tensor(images[2:4]).float() / 255.
-fig = plot_images(imgs)
-plt.savefig('test.png')
-embeddeds = patch_embed(imgs) # [2,9,16]
-fig = plot_seq_patches_transp(embeddeds, add_cls=False, title='Image / Sequence')
-plt.savefig('test.png')
-fig = plot_seq_patches_transp(embeddeds, add_cls=True, title='Image / Sequence')
-plt.savefig('test.png')
-cls_token = nn.Parameter(torch.zeros(1,1,16))
-# Fetch a batch, embed and add cls
-images, labels = next(iter(train_loader)) # images: [16,1,12,12]
-embed = patch_embed(images) # [16,9,16]
-cls_tokens = cls_token.expand(embed.size(0),-1,-1) # replicate [1,1,16]=>[16,1,16] (-1 means keeping this dim unchanged)
-embed_cls = torch.cat((cls_tokens, embed), dim=1) # [16,1,16]&[16,9,16]=>[16,10,16]
+# ## Special Classifier Token [CLS]
+# imgs = torch.as_tensor(images[2:4]).float() / 255.
+# fig = plot_images(imgs)
+# plt.savefig('test.png')
+# embeddeds = patch_embed(imgs) # [2,9,16]
+# fig = plot_seq_patches_transp(embeddeds, add_cls=False, title='Image / Sequence')
+# plt.savefig('test.png')
+# fig = plot_seq_patches_transp(embeddeds, add_cls=True, title='Image / Sequence')
+# plt.savefig('test.png')
+# cls_token = nn.Parameter(torch.zeros(1,1,16))
+# # Fetch a batch, embed and add cls
+# images, labels = next(iter(train_loader)) # images: [16,1,12,12]
+# embed = patch_embed(images) # [16,9,16]
+# cls_tokens = cls_token.expand(embed.size(0),-1,-1) # replicate [1,1,16]=>[16,1,16] (-1 means keeping this dim unchanged)
+# embed_cls = torch.cat((cls_tokens, embed), dim=1) # [16,1,16]&[16,9,16]=>[16,10,16]
 
 class ViT(nn.Module):
     def __init__(self, encoder, img_size, in_channels, patch_size, n_outputs):
@@ -539,32 +541,46 @@ class ViT(nn.Module):
         out = self.mlp(cls_state) # [N,1,outputs]
         return out 
 
-torch.manual_seed(17)
-layer = EncoderLayer(n_heads=2, d_model=16, ff_units=20)
-encoder = EncoderTransf(layer, n_layers=1)
-model_vit = ViT(encoder, img_size=12, in_channels=1, patch_size=4, n_outputs=3)
-multi_loss_fn = nn.CrossEntropyLoss()
-optimizer_vit = optim.Adam(model_vit.parameters(), lr=1e-3)
-sbs_vit = StepByStep(model_vit, multi_loss_fn, optimizer_vit)
-sbs_vit.set_loaders(train_loader, val_loader)
-sbs_vit.train(20)
-fig = sbs_vit.plot_losses()
-plt.savefig('test.png')
-print("CLS token for classification:\n", model_vit.cls_token)
-print("Model Recall:\n", StepByStep.loader_apply(sbs_vit.val_loader, sbs_vit.correct))
+# torch.manual_seed(17)
+# layer = EncoderLayer(n_heads=2, d_model=16, ff_units=20)
+# encoder = EncoderTransf(layer, n_layers=1)
+# model_vit = ViT(encoder, img_size=12, in_channels=1, patch_size=4, n_outputs=3)
+# multi_loss_fn = nn.CrossEntropyLoss()
+# optimizer_vit = optim.Adam(model_vit.parameters(), lr=1e-3)
+# sbs_vit = StepByStep(model_vit, multi_loss_fn, optimizer_vit)
+# sbs_vit.set_loaders(train_loader, val_loader)
+# sbs_vit.train(20)
+# fig = sbs_vit.plot_losses()
+# plt.savefig('test.png')
+# print("CLS token for classification:\n", model_vit.cls_token)
+# print("Model Recall:\n", StepByStep.loader_apply(sbs_vit.val_loader, sbs_vit.correct))
 
 ## Putting It All Together
 # Data preparation
 points, directions = generate_sequences(n=256, seed=13) # [256,4,2]
-full_train = torch.as_tensor(points).float() # [256,4,2]
+full_train = torch.as_tensor(np.array(points)).float() # [256,4,2]
 target_train = full_train[:, 2:] # [256,2,2]
 train_data = TensorDataset(full_train, target_train)
 generator = torch.Generator()
 train_loader = DataLoader(train_data, batch_size=16, shuffle=True, generator=generator)
 
 test_points, test_directions = generate_sequences(seed=19)
-full_test = torch.as_tensor(test_points).float()
+full_test = torch.as_tensor(np.array(test_points)).float()
 source_test = full_test[:, :2] # [256,2,2]
 target_test = full_test[:, 2:] # [256,2,2]
 test_data = TensorDataset(source_test, target_test)
 test_loader = DataLoader(test_data, batch_size=16)
+
+# Model configuration and training 
+torch.manual_seed(42)
+enclayer = EncoderLayer(n_heads=3, d_model=6, ff_units=10, dropout=0.1)
+declayer = DecoderLayer(n_heads=3, d_model=6, ff_units=10, dropout=0.1)
+enctransf = EncoderTransf(enclayer, n_layers=2)
+dectransf = DecoderTransf(declayer, n_layers=2)
+model_transf = EncoderDecoderTransf(
+    enctransf,
+    dectransf,
+    input_len=2,
+    target_len=2,
+    n_features=2
+)
