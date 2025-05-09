@@ -2,7 +2,8 @@ import numpy as np
 import torch 
 import torch.optim as optim 
 import torch.nn as nn 
-import torch.nn.functional as F 
+import torch.nn.functional as F
+import copy 
 
 def subsequent_mask(size):
     attn_shape = (1, size, size)
@@ -114,10 +115,10 @@ class EncoderLayer(nn.Module):
 class EncoderTransf(nn.Module):
     def __init__(self, encoder_layer, n_layers=1, max_len=100):
         super().__init__()
-        self.d_model = encoder.d_model 
+        self.d_model = encoder_layer.d_model 
         self.pe = PositionalEncoding(max_len, self.d_model)
         self.norm = nn.LayerNorm(self.d_model)
-        self.layers = nn.Modulelist([
+        self.layers = nn.ModuleList([
             copy.deepcopy(encoder_layer)
             for _ in range(n_layers)
         ])
@@ -169,7 +170,7 @@ class DecoderTransf(nn.Module):
         super(DecoderTransf, self).__init__()
         self.d_model = decoder_layer.d_model 
         self.pe = PositionalEncoding(max_len, self.d_model)
-        self.norm = LayerNorm(self.d_model)
+        self.norm = nn.LayerNorm(self.d_model)
         self.layers = nn.ModuleList([
             copy.deepcopy(decoder_layer)
             for _ in range(n_layers)
@@ -242,7 +243,7 @@ class MultiHeadedAttention(nn.Module):
     def forward(self, query, mask=None):
         if mask is not None:
             # [N,L,L]->[N,1,L,L] (every head uses the same mask)
-            mask = unsqueeze(1)        
+            mask = mask.unsqueeze(1)        
         context = self.attn(query, mask=mask)
         context = context.transpose(1,2).contiguous() # [N,L,n_heads,d_head]
         context = context.view(query.size(0), -1, self.d_model) # [N,L,d_model]

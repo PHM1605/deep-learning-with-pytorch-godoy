@@ -11,7 +11,7 @@ from data_generation.square_sequences import generate_sequences
 from data_generation.image_classification import generate_dataset 
 from helpers import index_splitter, make_balanced_sampler 
 from stepbystep.v4 import StepByStep 
-from seq2seq import PositionalEncoding, subsequent_mask, EncoderDecoderSelfAttn, EncoderLayer
+from seq2seq import PositionalEncoding, subsequent_mask, EncoderDecoderSelfAttn, EncoderLayer, DecoderLayer, EncoderTransf, DecoderTransf
 from plots.chapter8 import *
 from plots.chapter9 import *
 from plots.chapter10 import *
@@ -584,3 +584,14 @@ model_transf = EncoderDecoderTransf(
     target_len=2,
     n_features=2
 )
+loss = nn.MSELoss()
+optimizer = torch.optim.Adam(model_transf.parameters(), lr=0.01)
+
+for p in model_transf.parameters():
+    if p.dim() > 1:
+        nn.init.xavier_uniform_(p)
+
+sbs_seq_transf = StepByStep(model_transf, loss, optimizer)
+sbs_seq_transf.set_loaders(train_loader, test_loader)
+sbs_seq_transf.train(50)
+print("Train and Val Losses: ", sbs_seq_transf.losses[-1], sbs_seq_transf.val_losses[-1])
