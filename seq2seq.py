@@ -227,6 +227,7 @@ class MultiHeadedAttention(nn.Module):
     def attn(self, query, mask=None):
         # query: [N,L,D]->scores: [N,n_heads,L,L]
         scores = self.score_function(query)
+        # mask: [N,1,D,L] (D must be 1 or L)
         if mask is not None:
             scores = scores.masked_fill(mask==0, -1e9)
         alphas = F.softmax(scores, dim=-1)
@@ -242,7 +243,8 @@ class MultiHeadedAttention(nn.Module):
     
     def forward(self, query, mask=None):
         if mask is not None:
-            # [N,L,L]->[N,1,L,L] (every head uses the same mask)
+            # [N,D,L]->[N,1,D,L] (every head uses the same mask)
+            # D must be 1 or L
             mask = mask.unsqueeze(1)        
         context = self.attn(query, mask=mask)
         context = context.transpose(1,2).contiguous() # [N,L,n_heads,d_head]
