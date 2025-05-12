@@ -14,6 +14,7 @@ from seq2seq import *
 
 import nltk 
 from nltk.tokenize import sent_tokenize
+nltk.download('punkt_tab')
 
 import gensim 
 from gensim import corpora, downloader
@@ -22,6 +23,7 @@ from gensim.utils import simple_preprocess
 from datasets import load_dataset, Split
 from textattack.augmentation import EmbeddingAugmenter
 from transformers import BertTokenizer
+from flair.data import Sentence
 from plots.chapter11 import *
 
 localfolder = 'texts'
@@ -540,3 +542,31 @@ inputs = glove_tokenizer(sentences, add_special_tokens=False, return_tensors='pt
     'input_ids'
 ]
 print("New tokens'ids:\n", inputs)
+inputs = inputs.to('cuda')
+sbs_transf.model.eval()
+out = sbs_transf.model(inputs)
+print("Those sentences belong to class:\n", torch.sigmoid(out))
+alphas = sbs_transf.model.encoder.layers[0].self_attn_heads.alphas # [N,n_heads,L+1,L+1]->[2,2,8,8]
+print("Attention of the 1st output to the whole sentence(s):\n", alphas[:,:,0,:].squeeze()) # [N,n_heads,1,8]->[N,n_heads,8]
+tokens = [['[CLS]'] + glove_tokenizer.tokenize(sent) for sent in sentences] # [['[CLS]','The','white',...], ['[CLS]','The','lion'...]]
+fig = plot_attention(tokens, alphas)
+plt.savefig('test.png')
+
+## Contextual Word Embeddings 
+# ELMo
+watch1 = """
+The Hatter was the first to break the silence. `What day of the month is it?' he said, turning to Alice:  he had taken his watch out of his pocket, and was looking at it uneasily, shaking it every now and then, and holding it to his ear.
+"""
+watch2 = """
+Alice thought this a very curious thing, and she went nearer to watch them, and just as she came up to them she heard one of them say, `Look out now, Five!  Don't go splashing paint over me like that!
+"""
+sentences = [watch1, watch2]
+flair_sentences = [Sentence(s) for s in sentences]
+print("Flair Sentence 0: ", flair_sentences[0])
+# get_token() starts indexing with 1; tokens[] starts indexing at 0 like usual
+print("32nd token: ", flair_sentences[0].get_token(32))
+print("32nd token: ", flair_sentences[0].tokens[31])
+
+from flair.embeddings import ELMoEmbeddings 
+elmo = ELMoEmbeddings()
+print("ELMoEmbeddings of 2 sentences:\n", elmo.embed(flair_sentences))
