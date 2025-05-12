@@ -16,6 +16,7 @@ import nltk
 from nltk.tokenize import sent_tokenize
 nltk.download('punkt_tab')
 
+
 import gensim 
 from gensim import corpora, downloader
 from gensim.parsing.preprocessing import *
@@ -24,6 +25,9 @@ from datasets import load_dataset, Split
 from textattack.augmentation import EmbeddingAugmenter
 from transformers import BertTokenizer
 from flair.data import Sentence
+from flair.embeddings import ELMoEmbeddings 
+from flair.embeddings import WordEmbeddings # like Glove
+from flair.embeddings import TransformerWordEmbeddings, TransformerDocumentEmbeddings
 from plots.chapter11 import *
 
 localfolder = 'texts'
@@ -117,17 +121,17 @@ def sentence_tokenize(source, quote_char='\\', sep_char=',', include_header=True
         new_fnames.append(new_fname)
     return sorted(new_fnames)
 
-new_fnames = sentence_tokenize(localfolder)
-print("New tokenized .csv files: ", new_fnames)
+# new_fnames = sentence_tokenize(localfolder)
+# print("New tokenized .csv files: ", new_fnames)
 
-## HuggingFace
-# Loading dataset
-dataset = load_dataset(
-    path='csv',
-    data_files=new_fnames,
-    quotechar='\\',
-    split=Split.TRAIN 
-)
+# ## HuggingFace
+# # Loading dataset
+# dataset = load_dataset(
+#     path='csv',
+#     data_files=new_fnames,
+#     quotechar='\\',
+#     split=Split.TRAIN 
+# )
 # print("Dataset columns: ", dataset.features) # {'sentence':'','source':''}
 # print("Dataset number of columns: ", dataset.num_columns)
 # print("Dataset shape: ", dataset.shape)
@@ -136,18 +140,20 @@ dataset = load_dataset(
 # print("Dataset source files: ", dataset.unique('source')) # ['a.txt','b.txt']
 # Add new column 'labels' to the dataset, 0/1 means belongs to 'alice' source or not
 # row: {'sentence': 'xxx', 'source':'alice.txt'}-> return {'label':0 or 1}
-def is_alice_label(row):
-    is_alice = int(row['source'] == 'alice28-1476.txt')
-    return {'labels': is_alice}
-dataset = dataset.map(is_alice_label) # {'labels':1,'sentence':'xxx','source':'alice.txt'}
-print ("Dataset (added 'labels' column):\n", dataset)
-# dataset shuffle and train test split
-shuffled_dataset = dataset.shuffle(seed=42)
-split_dataset = shuffled_dataset.train_test_split(test_size=0.2)
-# {'train':Dataset(), 'test':Dataset()}; each is {'features':['sentence','source','labels'], 'num_rows': 3081}
-print("Split dataset:\n", split_dataset) 
-train_dataset = split_dataset['train']
-test_dataset = split_dataset['test']
+
+# def is_alice_label(row):
+#     is_alice = int(row['source'] == 'alice28-1476.txt')
+#     return {'labels': is_alice}
+
+# dataset = dataset.map(is_alice_label) # {'labels':1,'sentence':'xxx','source':'alice.txt'}
+# print ("Dataset (added 'labels' column):\n", dataset)
+# # dataset shuffle and train test split
+# shuffled_dataset = dataset.shuffle(seed=42)
+# split_dataset = shuffled_dataset.train_test_split(test_size=0.2)
+# # {'train':Dataset(), 'test':Dataset()}; each is {'features':['sentence','source','labels'], 'num_rows': 3081}
+# print("Split dataset:\n", split_dataset) 
+# train_dataset = split_dataset['train']
+# test_dataset = split_dataset['test']
 
 # ## Word tokenization
 # sentence = "I'm following the white rabbit"
@@ -171,11 +177,11 @@ test_dataset = split_dataset['test']
 # for i in range(4):
 #     print(augmenter.augment(feynman))
 
-## Vocabulary
-sentences = train_dataset['sentence']
-tokens = [simple_preprocess(sent) for sent in sentences] # [[<tokens of sentence 1>],[<tokens of sentence 2],...]
-print("1st sentence's tokens: ", tokens[0])
-dictionary = corpora.Dictionary(tokens)
+# ## Vocabulary
+# sentences = train_dataset['sentence']
+# tokens = [simple_preprocess(sent) for sent in sentences] # [[<tokens of sentence 1>],[<tokens of sentence 2],...]
+# print("1st sentence's tokens: ", tokens[0])
+# dictionary = corpora.Dictionary(tokens)
 # print("Dictionary: ", dictionary) # Dictionary<3699 unique tokens: [...]>
 # print("Dict number of sentences: ", dictionary.num_docs)
 # print("Dict number of words: ", dictionary.num_pos)
@@ -189,9 +195,9 @@ dictionary = corpora.Dictionary(tokens)
 # ids = dictionary.doc2idx(new_tokens) # [524,23,469,459]
 # print(f"Tokens {new_tokens} have indices {ids}") # -1 it no exist
 
-# Add new tokens to dictionary
-special_tokens = {'[PAD]':0, '[UNK]':1}
-dictionary.patch_with_special_tokens(special_tokens)
+# # Add new tokens to dictionary
+# special_tokens = {'[PAD]':0, '[UNK]':1}
+# dictionary.patch_with_special_tokens(special_tokens)
 
 # Get rare ids, to filter out rare tokens 
 def get_rare_ids(dictionary, min_freq):
@@ -340,34 +346,34 @@ class CBOW(nn.Module):
 #         sims[i,j] = F.cosine_similarity(ratings[i], ratings[j], dim=0)
 # print("Similarity confusion matrix:\n", sims)
 
-## Glove - 40000 words, dimension of 50
-glove = downloader.load('glove-wiki-gigaword-50')
-print("Length of vocabulary: ", len(glove.key_to_index))
-print("Embedding of 'alice': ", glove['alice'])
-synthetic_queen = glove['king'] - glove['man'] + glove['woman']
-fig = plot_word_vectors(
-    glove,
-    ['king', 'man', 'woman', 'synthetic', 'queen'],
-    other={'synthetic': synthetic_queen}
-)
-plt.savefig('test.png')
-print("Similarity between 'synthetic_queen' and top 5 words:\n", glove.similar_by_vector(synthetic_queen, topn=5))
+# ## Glove - 40000 words, dimension of 50
+# glove = downloader.load('glove-wiki-gigaword-50')
+# print("Length of vocabulary: ", len(glove.key_to_index))
+# print("Embedding of 'alice': ", glove['alice'])
+# synthetic_queen = glove['king'] - glove['man'] + glove['woman']
+# fig = plot_word_vectors(
+#     glove,
+#     ['king', 'man', 'woman', 'synthetic', 'queen'],
+#     other={'synthetic': synthetic_queen}
+# )
+# plt.savefig('test.png')
+# print("Similarity between 'synthetic_queen' and top 5 words:\n", glove.similar_by_vector(synthetic_queen, topn=5))
 
-# Compare our vocabulary to glove pre-trained word-embeddings
-vocab = list(dictionary.token2id.keys())
-print("Len of our dictionary: ", len(vocab)) # 3706
-# how many and which words are unknown to Glove
-# glove.key_to_index: {'apple':0,'orange':1,...}
-# <set>.difference(<set>) return the keys which are different between 2 sets
-unknown_words = sorted(
-    list(set(vocab).difference(set(glove.key_to_index)))
-)
-print(f"{len(unknown_words)} unknown words, 5 of which are {unknown_words[:5]}")
-unknown_ids = [dictionary.token2id[w]
-    for w in unknown_words
-    if w not in ['[PAD]', '[UNK]']]
-unknown_count = np.sum([dictionary.cfs[idx] for idx in unknown_ids]) # the unknown words occur how many times in the scopus
-print(f"Unknown-embedded words occur {unknown_count} times in our scopus of {dictionary.num_pos} words")
+# # Compare our vocabulary to glove pre-trained word-embeddings
+# vocab = list(dictionary.token2id.keys())
+# print("Len of our dictionary: ", len(vocab)) # 3706
+# # how many and which words are unknown to Glove
+# # glove.key_to_index: {'apple':0,'orange':1,...}
+# # <set>.difference(<set>) return the keys which are different between 2 sets
+# unknown_words = sorted(
+#     list(set(vocab).difference(set(glove.key_to_index)))
+# )
+# print(f"{len(unknown_words)} unknown words, 5 of which are {unknown_words[:5]}")
+# unknown_ids = [dictionary.token2id[w]
+#     for w in unknown_words
+#     if w not in ['[PAD]', '[UNK]']]
+# unknown_count = np.sum([dictionary.cfs[idx] for idx in unknown_ids]) # the unknown words occur how many times in the scopus
+# print(f"Unknown-embedded words occur {unknown_count} times in our scopus of {dictionary.num_pos} words")
 
 def vocab_coverage(gensim_dict, pretrained_wv, special_tokens=('[PAD]', '[UNK]')):
     vocab = list(gensim_dict.token2id.keys())
@@ -380,7 +386,7 @@ def vocab_coverage(gensim_dict, pretrained_wv, special_tokens=('[PAD]', '[UNK]')
     unknown_count = np.sum([gensim_dict.cfs[idx] for idx in unknown_ids])
     cov = 1 - unknown_count / gensim_dict.num_pos 
     return cov 
-print("Coverage of pretrained Glove to our dict: ", vocab_coverage(dictionary, glove))
+# print("Coverage of pretrained Glove to our dict: ", vocab_coverage(dictionary, glove))
 
 def make_vocab_from_wv(wv, folder=None, special_tokens=None):
     if folder is not None:
@@ -398,54 +404,54 @@ def make_vocab_from_wv(wv, folder=None, special_tokens=None):
         for word in words:
             f.write(f'{word}\n')
 
-make_vocab_from_wv(glove, 'glove_vocab/', special_tokens=['[PAD]', '[UNK]'])
-glove_tokenizer = BertTokenizer('glove_vocab/vocab.txt')
-print("Glove encode for world-vector-vocab: ", glove_tokenizer.encode('alice followed the white rabbit', add_special_tokens=False))
-print("Original glove #words: ", len(glove.vectors))
-print("Our newly created #words: ", len(glove_tokenizer.vocab))
-# Add [PAD] and [UNK] to the embeddings list
-special_embeddings = np.zeros((2, glove.vector_size))
-extended_embeddings = np.concatenate(
-    [special_embeddings, glove.vectors], axis=0
-)
-print("New embeddings shape: ", extended_embeddings.shape)
-# 'alice' index in our new tokenizer 
-alice_idx = glove_tokenizer.encode(
-    'alice', add_special_tokens=False
-)
-# check if the glove's embedding and our embeddings match
-print(np.all(extended_embeddings[alice_idx] == glove['alice']))
+# make_vocab_from_wv(glove, 'glove_vocab/', special_tokens=['[PAD]', '[UNK]'])
+# glove_tokenizer = BertTokenizer('glove_vocab/vocab.txt')
+# print("Glove encode for world-vector-vocab: ", glove_tokenizer.encode('alice followed the white rabbit', add_special_tokens=False))
+# print("Original glove #words: ", len(glove.vectors))
+# print("Our newly created #words: ", len(glove_tokenizer.vocab))
+# # Add [PAD] and [UNK] to the embeddings list
+# special_embeddings = np.zeros((2, glove.vector_size))
+# extended_embeddings = np.concatenate(
+#     [special_embeddings, glove.vectors], axis=0
+# )
+# print("New embeddings shape: ", extended_embeddings.shape)
+# # 'alice' index in our new tokenizer 
+# alice_idx = glove_tokenizer.encode(
+#     'alice', add_special_tokens=False
+# )
+# # check if the glove's embedding and our embeddings match
+# print(np.all(extended_embeddings[alice_idx] == glove['alice']))
 
-## Model I - Glove + Classifier
-# Data preparation
-train_sentences = train_dataset['sentence']
-train_labels = train_dataset['labels']
-test_sentences = test_dataset['sentence']
-test_labels = test_dataset['labels']
-train_ids = glove_tokenizer(
-    train_sentences,
-    truncation = True, 
-    padding = True,
-    max_length=60,
-    add_special_tokens=False,
-    return_tensors='pt')['input_ids'] # [n_sentences,60]
-train_labels = torch.as_tensor(train_labels).float().view(-1,1)
-test_ids = glove_tokenizer(
-    test_sentences, 
-    truncation=True, 
-    padding=True, 
-    max_length=60, 
-    add_special_tokens=False, 
-    return_tensors='pt')['input_ids']
-test_labels = torch.as_tensor(test_labels).float().view(-1,1)
-train_tensor_dataset = TensorDataset(train_ids, train_labels)
-generator = torch.Generator()
-train_loader = DataLoader(train_tensor_dataset, batch_size=32, shuffle=True, generator=generator)
-test_tensor_dataset = TensorDataset(test_ids, test_labels)
-test_loader = DataLoader(test_tensor_dataset, batch_size=32)
-extended_embeddings = torch.as_tensor(extended_embeddings).float()
-# Pre-trained PyTorch embeddings
-torch_embeddings = nn.Embedding.from_pretrained(extended_embeddings)
+# ## Model I - Glove + Classifier
+# # Data preparation
+# train_sentences = train_dataset['sentence']
+# train_labels = train_dataset['labels']
+# test_sentences = test_dataset['sentence']
+# test_labels = test_dataset['labels']
+# train_ids = glove_tokenizer(
+#     train_sentences,
+#     truncation = True, 
+#     padding = True,
+#     max_length=60,
+#     add_special_tokens=False,
+#     return_tensors='pt')['input_ids'] # [n_sentences,60]
+# train_labels = torch.as_tensor(train_labels).float().view(-1,1)
+# test_ids = glove_tokenizer(
+#     test_sentences, 
+#     truncation=True, 
+#     padding=True, 
+#     max_length=60, 
+#     add_special_tokens=False, 
+#     return_tensors='pt')['input_ids']
+# test_labels = torch.as_tensor(test_labels).float().view(-1,1)
+# train_tensor_dataset = TensorDataset(train_ids, train_labels)
+# generator = torch.Generator()
+# train_loader = DataLoader(train_tensor_dataset, batch_size=32, shuffle=True, generator=generator)
+# test_tensor_dataset = TensorDataset(test_ids, test_labels)
+# test_loader = DataLoader(test_tensor_dataset, batch_size=32)
+# extended_embeddings = torch.as_tensor(extended_embeddings).float()
+# # Pre-trained PyTorch embeddings
+# torch_embeddings = nn.Embedding.from_pretrained(extended_embeddings)
 
 # # Check one batch
 # token_ids, labels = next(iter(train_loader)) # token_ids: [batch,sentence_len]=[32,60]
@@ -516,41 +522,41 @@ class TransfClassifier(nn.Module):
         out = self.mlp(cls_state)
         return out 
 
-torch.manual_seed(33)
-# We use bag-of-embeddings only when input is [N,D], but now we need [N,L,D]
-layer = EncoderLayer(
-    n_heads=2, d_model=torch_embeddings.embedding_dim, ff_units=128
-)
-encoder = EncoderTransf(layer, n_layers=1)
-model = TransfClassifier(torch_embeddings, encoder, n_outputs=1)
-loss_fn = nn.BCEWithLogitsLoss()
-optimizer = nn.BCEWithLogitsLoss()
-optimizer = optim.Adam(model.parameters(), lr=1e-4)
-sbs_transf = StepByStep(model, loss_fn, optimizer)
-sbs_transf.set_loaders(train_loader, test_loader)
-sbs_transf.train(10)
-fig = sbs_transf.plot_losses()
-plt.savefig('test.png')
-print("Recall on the test set of TransfClassifier:\n", StepByStep.loader_apply(test_loader, sbs_transf.correct))
+# torch.manual_seed(33)
+# # We use bag-of-embeddings only when input is [N,D], but now we need [N,L,D]
+# layer = EncoderLayer(
+#     n_heads=2, d_model=torch_embeddings.embedding_dim, ff_units=128
+# )
+# encoder = EncoderTransf(layer, n_layers=1)
+# model = TransfClassifier(torch_embeddings, encoder, n_outputs=1)
+# loss_fn = nn.BCEWithLogitsLoss()
+# optimizer = nn.BCEWithLogitsLoss()
+# optimizer = optim.Adam(model.parameters(), lr=1e-4)
+# sbs_transf = StepByStep(model, loss_fn, optimizer)
+# sbs_transf.set_loaders(train_loader, test_loader)
+# sbs_transf.train(10)
+# fig = sbs_transf.plot_losses()
+# plt.savefig('test.png')
+# print("Recall on the test set of TransfClassifier:\n", StepByStep.loader_apply(test_loader, sbs_transf.correct))
 
-## Visualizing attention
-sentences = [
-    'The white rabbit and Alice ran away',
-    'The lion met Dorothy on the road'
-]
-inputs = glove_tokenizer(sentences, add_special_tokens=False, return_tensors='pt')[
-    'input_ids'
-]
-print("New tokens'ids:\n", inputs)
-inputs = inputs.to('cuda')
-sbs_transf.model.eval()
-out = sbs_transf.model(inputs)
-print("Those sentences belong to class:\n", torch.sigmoid(out))
-alphas = sbs_transf.model.encoder.layers[0].self_attn_heads.alphas # [N,n_heads,L+1,L+1]->[2,2,8,8]
-print("Attention of the 1st output to the whole sentence(s):\n", alphas[:,:,0,:].squeeze()) # [N,n_heads,1,8]->[N,n_heads,8]
-tokens = [['[CLS]'] + glove_tokenizer.tokenize(sent) for sent in sentences] # [['[CLS]','The','white',...], ['[CLS]','The','lion'...]]
-fig = plot_attention(tokens, alphas)
-plt.savefig('test.png')
+# ## Visualizing attention
+# sentences = [
+#     'The white rabbit and Alice ran away',
+#     'The lion met Dorothy on the road'
+# ]
+# inputs = glove_tokenizer(sentences, add_special_tokens=False, return_tensors='pt')[
+#     'input_ids'
+# ]
+# print("New tokens'ids:\n", inputs)
+# # inputs = inputs.to('cuda')
+# sbs_transf.model.eval()
+# out = sbs_transf.model(inputs)
+# print("Those sentences belong to class:\n", torch.sigmoid(out))
+# alphas = sbs_transf.model.encoder.layers[0].self_attn_heads.alphas # [N,n_heads,L+1,L+1]->[2,2,8,8]
+# print("Attention of the 1st output to the whole sentence(s):\n", alphas[:,:,0,:].squeeze()) # [N,n_heads,1,8]->[N,n_heads,8]
+# tokens = [['[CLS]'] + glove_tokenizer.tokenize(sent) for sent in sentences] # [['[CLS]','The','white',...], ['[CLS]','The','lion'...]]
+# fig = plot_attention(tokens, alphas)
+# plt.savefig('test.png')
 
 ## Contextual Word Embeddings 
 # ELMo
@@ -560,13 +566,78 @@ The Hatter was the first to break the silence. `What day of the month is it?' he
 watch2 = """
 Alice thought this a very curious thing, and she went nearer to watch them, and just as she came up to them she heard one of them say, `Look out now, Five!  Don't go splashing paint over me like that!
 """
-sentences = [watch1, watch2]
-flair_sentences = [Sentence(s) for s in sentences]
-print("Flair Sentence 0: ", flair_sentences[0])
-# get_token() starts indexing with 1; tokens[] starts indexing at 0 like usual
-print("32nd token: ", flair_sentences[0].get_token(32))
-print("32nd token: ", flair_sentences[0].tokens[31])
+# sentences = [watch1, watch2]
+# flair_sentences = [Sentence(s) for s in sentences]
+# print("Flair Sentence 0: ", flair_sentences[0])
+# # get_token() starts indexing with 1; tokens[] starts indexing at 0 like usual
+# print("32nd token: ", flair_sentences[0].get_token(32))
+# print("32nd token: ", flair_sentences[0].tokens[31])
 
-from flair.embeddings import ELMoEmbeddings 
-elmo = ELMoEmbeddings()
-print("ELMoEmbeddings of 2 sentences:\n", elmo.embed(flair_sentences))
+# elmo = ELMoEmbeddings()
+# print("ELMoEmbeddings of 2 sentences:\n", elmo.embed(flair_sentences)) # [Sentence0, Sentence1]
+# token_watch1 = flair_sentences[0].tokens[31] # Token:32 watch
+# token_watch2 = flair_sentences[1].tokens[13]  # Token:14 watch
+# # each 3072-D tensor([-0.5,-0.42,...]), different, even though same word 'watch'
+# print(token_watch1.embedding, token_watch2.embedding) 
+# similarity =nn.CosineSimilarity(dim=0, eps=1e-6)
+# # similarity 0.6 (tensor)
+# print(
+#     "Similarity between two words 'watch' from two sentences:\n",
+#     similarity(token_watch1.embedding, token_watch2.embedding))
+
+# embeddings: our ELMo or BERT class object
+def get_embeddings(embeddings, sentence):
+    sent = Sentence(sentence)
+    embeddings.embed(sent)
+    # stacking [tensor, tensor,...] (58 tensors as 58 words of 3072-D dimension each)
+    return torch.stack([
+        token.embedding for token in sent.tokens
+    ]).float()
+
+# print(get_embeddings(elmo, watch1)) # tensor [58,3072]
+
+# # Explains the 3072 dimensions: adding 6 chunks of 512D each
+# # embedding forward + embedding backward + hidden forward layer0 + hidden backward layer0 + hidden forward layer1 + hidden backward layer1
+# print("First 2 chunks the same: ", token_watch1.embedding[0], token_watch1.embedding[512])
+# print("Two words 'watch' the same: ", (token_watch1.embedding[:1024] == token_watch2.embedding[:1024]).all())
+
+# ## Glove from flair 
+# glove_embedding = WordEmbeddings('glove')
+# new_flair_sentences = [Sentence(s) for s in sentences] # [Sentence0, Sentence1]
+# print("Flair Glove sentences:\n", glove_embedding.embed(new_flair_sentences))
+# print("All words 'watch' will have same value:\n", new_flair_sentences[0].tokens[31].embedding == new_flair_sentences[1].tokens[13].embedding) # True
+
+## BERT - Bidirectional Encoder Representations from Transformers
+bert = TransformerWordEmbeddings('bert-base-uncased', layers='-1') # using BERT last layer to generate embeddings
+embed1 = get_embeddings(bert, watch1)
+embed2 = get_embeddings(bert, watch2)
+print("Embedding of sentence 1 shape: ", embed1.shape) # [58,768]
+print("Embedding of sentence 2 shape: ", embed2.shape) # [48,768]
+# Compare the embeddings for the word 'watch' in both sentences
+bert_watch1 = embed1[31]
+bert_watch2 = embed2[13]
+similarity = nn.CosineSimilarity(dim=0, eps=1e-6)
+print("Prove that two 'watch' embeddings different:\n", similarity(bert_watch1, bert_watch2))
+
+## Document Embeddings 
+documents = [Sentence(watch1), Sentence(watch2)]
+bert_doc = TransformerDocumentEmbeddings('bert-base-uncased')
+bert_doc.embed(documents) # documents: [Sentence-with-58-tokens, Sentence-with-48-tokens]
+# Notice: we don't have single token's embedding anymore, but only 1 document embedding (sentence.tokens[idx] is [])
+print("Overall embedding of 1st sentence:\n", documents[0].embedding) # [768]
+
+# embeddings: embedding method Glove or BERT
+def get_embeddings(embeddings, sentence):
+    sent = Sentence(sentence)
+    embeddings.embed(sent)
+    # Document embedding
+    if len(sent.embedding):
+        return sent.embedding.float()
+    else:
+    # Word embedding: stacking [768D-word-embedding, 768D-word-embedding,...]
+        return torch.stack([
+            token.embedding for token in sent.tokens 
+        ]).float()
+print("Get embeddings of 1st sentence:\n", get_embeddings(bert_doc, watch1).shape) # [768]
+
+## Model III - Preprocessed Embeddings 

@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torchvision.transforms.v2 import Normalize
+# from torchvision import transforms 
 from copy import deepcopy
 from torch.optim.lr_scheduler import LambdaLR
 
@@ -347,6 +348,7 @@ class StepByStep(object):
         norm_mean = total_means / total_samples # [3], one for each channel
         norm_std = total_stds / total_samples # [3], one for each channel 
         return Normalize(mean=norm_mean, std=norm_std)
+        # return transforms.Normalize(mean=norm_mean, std=norm_std)
     
     def lr_range_test(self, data_loader, end_lr, num_iter=100, step_mode='exp', alpha=0.05, ax=None):
         previous_states = {
