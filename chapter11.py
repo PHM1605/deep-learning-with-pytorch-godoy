@@ -24,10 +24,12 @@ from gensim.utils import simple_preprocess
 from datasets import load_dataset, Split
 from textattack.augmentation import EmbeddingAugmenter
 from transformers import BertTokenizer
+from transformers import AutoModel, BertModel, AutoTokenizer, DataCollatorForLanguageModeling
 from flair.data import Sentence
 from flair.embeddings import ELMoEmbeddings 
 from flair.embeddings import WordEmbeddings # like Glove
 from flair.embeddings import TransformerWordEmbeddings, TransformerDocumentEmbeddings
+
 from plots.chapter11 import *
 
 localfolder = 'texts'
@@ -121,17 +123,17 @@ def sentence_tokenize(source, quote_char='\\', sep_char=',', include_header=True
         new_fnames.append(new_fname)
     return sorted(new_fnames)
 
-# new_fnames = sentence_tokenize(localfolder)
-# print("New tokenized .csv files: ", new_fnames)
+new_fnames = sentence_tokenize(localfolder)
+print("New tokenized .csv files: ", new_fnames)
 
-# ## HuggingFace
-# # Loading dataset
-# dataset = load_dataset(
-#     path='csv',
-#     data_files=new_fnames,
-#     quotechar='\\',
-#     split=Split.TRAIN 
-# )
+## HuggingFace
+# Loading dataset
+dataset = load_dataset(
+    path='csv',
+    data_files=new_fnames,
+    quotechar='\\',
+    split=Split.TRAIN 
+)
 # print("Dataset columns: ", dataset.features) # {'sentence':'','source':''}
 # print("Dataset number of columns: ", dataset.num_columns)
 # print("Dataset shape: ", dataset.shape)
@@ -141,19 +143,19 @@ def sentence_tokenize(source, quote_char='\\', sep_char=',', include_header=True
 # Add new column 'labels' to the dataset, 0/1 means belongs to 'alice' source or not
 # row: {'sentence': 'xxx', 'source':'alice.txt'}-> return {'label':0 or 1}
 
-# def is_alice_label(row):
-#     is_alice = int(row['source'] == 'alice28-1476.txt')
-#     return {'labels': is_alice}
+def is_alice_label(row):
+    is_alice = int(row['source'] == 'alice28-1476.txt')
+    return {'labels': is_alice}
 
-# dataset = dataset.map(is_alice_label) # {'labels':1,'sentence':'xxx','source':'alice.txt'}
-# print ("Dataset (added 'labels' column):\n", dataset)
-# # dataset shuffle and train test split
-# shuffled_dataset = dataset.shuffle(seed=42)
-# split_dataset = shuffled_dataset.train_test_split(test_size=0.2)
-# # {'train':Dataset(), 'test':Dataset()}; each is {'features':['sentence','source','labels'], 'num_rows': 3081}
-# print("Split dataset:\n", split_dataset) 
-# train_dataset = split_dataset['train']
-# test_dataset = split_dataset['test']
+dataset = dataset.map(is_alice_label) # {'labels':1,'sentence':'xxx','source':'alice.txt'}
+print ("Dataset (added 'labels' column):\n", dataset)
+# dataset shuffle and train test split
+shuffled_dataset = dataset.shuffle(seed=42)
+split_dataset = shuffled_dataset.train_test_split(test_size=0.2)
+# {'train':Dataset(), 'test':Dataset()}; each is {'features':['sentence','source','labels'], 'num_rows': 3081}
+print("Split dataset:\n", split_dataset) 
+train_dataset = split_dataset['train']
+test_dataset = split_dataset['test']
 
 # ## Word tokenization
 # sentence = "I'm following the white rabbit"
@@ -608,9 +610,9 @@ def get_embeddings(embeddings, sentence):
 # print("All words 'watch' will have same value:\n", new_flair_sentences[0].tokens[31].embedding == new_flair_sentences[1].tokens[13].embedding) # True
 
 ## BERT - Bidirectional Encoder Representations from Transformers
-bert = TransformerWordEmbeddings('bert-base-uncased', layers='-1') # using BERT last layer to generate embeddings
-embed1 = get_embeddings(bert, watch1)
-embed2 = get_embeddings(bert, watch2)
+bert_flair = TransformerWordEmbeddings('bert-base-uncased', layers='-1') # using BERT last layer to generate embeddings
+embed1 = get_embeddings(bert_flair, watch1)
+embed2 = get_embeddings(bert_flair, watch2)
 print("Embedding of sentence 1 shape: ", embed1.shape) # [58,768]
 print("Embedding of sentence 2 shape: ", embed2.shape) # [48,768]
 # Compare the embeddings for the word 'watch' in both sentences
@@ -641,3 +643,130 @@ def get_embeddings(embeddings, sentence):
 print("Get embeddings of 1st sentence:\n", get_embeddings(bert_doc, watch1).shape) # [768]
 
 ## Model III - Preprocessed Embeddings 
+# Add one more column of features 'embeddings' -> return a Dataset with 4 columns
+train_dataset_doc = train_dataset.map(
+    lambda row: {'embeddings': get_embeddings(bert_doc, row['sentence'])}
+)
+test_dataset_doc = test_dataset.map(
+    lambda row: {'embeddings': get_embeddings(bert_doc, row['sentence'])}
+)
+# Set 'embeddings' and 'labels' columns as torch tensors
+train_dataset_doc.set_format(type='torch', columns=['embeddings', 'labels'])
+test_dataset_doc.set_format(type='torch', columns=['embeddings', 'labels'])
+
+train_dataset_doc = TensorDataset(
+    train_dataset_doc['embeddings'].float(),
+    train_dataset_doc['labels'].view(-1,1).float()
+)
+generator = torch.Generator()
+train_loader = DataLoader(
+    train_dataset_doc, batch_size=32, shuffle=True, generator=generator
+)
+test_dataset_doc = TensorDataset(
+    test_dataset_doc['embeddings'].float(),
+    test_dataset_doc['labels'].view(-1,1).float()
+)
+test_loader = DataLoader(
+    test_dataset_doc, batch_size=32, shuffle=True
+)
+
+torch.manual_seed(41)
+model = nn.Sequential(
+    nn.Linear(bert_doc.embedding_length, 3),
+    nn.ReLU(),
+    nn.Linear(3,1)
+)
+loss_fn = nn.BCEWithLogitsLoss()
+optimizer = optim.Adam(model.parameters(), lr=1e-3)
+sbs_doc_emb = StepByStep(model, loss_fn, optimizer)
+sbs_doc_emb.set_loaders(train_loader, test_loader)
+sbs_doc_emb.train(20)
+fig = sbs_doc_emb.plot_losses()
+plt.savefig('test.png')
+print("Recall on test dataset:\n", StepByStep.loader_apply(test_loader, sbs_doc_emb.correct))
+
+## BERT
+# # AutoModel
+# auto_model = AutoModel.from_pretrained('bert-base-uncased') # transformers.modeling_bert.BertModel
+bert_model = BertModel.from_pretrained('bert-base-uncased')
+print("BERT configs:\n", bert_model.config)
+bert_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+print("Number of words in BERT Tokenizer:\n", len(bert_tokenizer.vocab)) # 30522
+sentence1 = 'Alice is inexplicably following the white rabbit'
+sentence2 = 'Follow the white rabbit, Neo'
+tokens = bert_tokenizer(sentence1, sentence2, return_tensors='pt')
+# {'input_ids': [[101,565,...]], 'token_type_ids':[[0,0,...,1]], 'attention_mask':[[1,1,...,1]]}
+print("Bert tokens from two sentences:\n", tokens) 
+# ['[CLS]', 'alice', 'is', 'in', '##ex', '##pl', '##ica', '##bly', 'following', 'the', 'white', 'rabbit', '[SEP]', 'follow', 'the', 'white', 'rabbit', ',', 'neo', '[SEP]']
+print("Convert Bert tokens to words:\n", bert_tokenizer.convert_ids_to_tokens(tokens['input_ids'][0]))
+
+# # AutoTokenizer
+# auto_tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased') # transformers.tokenization_bert.BertTokenizer 
+
+# max_sequence_len: 512, embed_dim: 768
+# word_embeddings: [30522,768], position_embeddings: [512,768], token_type_embeddings: [2,768]
+input_embeddings = bert_model.embeddings 
+print("Bert Embeddings:\n", input_embeddings)
+token_embeddings = input_embeddings.word_embeddings 
+input_token_emb = token_embeddings(tokens['input_ids'])
+print("Input embeddings shape: ", input_token_emb.shape) # [1,20,768]
+position_embeddings = input_embeddings.position_embeddings 
+print("Position embeddings: ", position_embeddings) # Embedding(512,768)
+position_ids = torch.arange(512).expand((1,-1)) # [1,512]
+seq_length = tokens['input_ids'].size(1) # 20
+input_pos_emb = position_embeddings(position_ids[:, :seq_length]) # Embedding(<tensor of [1,20]>)->[1,20,768]
+segment_embeddings = input_embeddings.token_type_embeddings # Embedding(2,768) as we have 2 sentences
+# Embedding(<tensor of [1,20]>)->[1,20,768]; 
+# 1st part is of 1st sentence will have the same embeddings; 2nd part is of 2nd sentence will have same embeddings too
+input_seg_emb = segment_embeddings(tokens['token_type_ids']) # [1,20,768]
+input_emb = input_token_emb + input_pos_emb + input_seg_emb # [1,20,768]
+print(input_emb.shape)
+
+## Masked Language Model (MLM)
+# Data Collator
+sentence = 'Alice is inexplicably following the white rabbit'
+tokens = bert_tokenizer(sentence)
+print("MLM tokens' ids:\n", tokens['input_ids'])
+torch.manual_seed(41)
+data_collator = DataCollatorForLanguageModeling(
+    tokenizer=bert_tokenizer, mlm_probability=0.15
+)
+mlm_tokens = data_collator([tokens])
+# {'input_ids': [[101,5650,...,103,...]], 'labels': [[-100,-100,...,5555,...]]}
+print("MLM tokens:\n", mlm_tokens) # id=103 & labels=5555 are for the mask '[MASK] replaced token'
+print("Original sentence:\n", bert_tokenizer.convert_ids_to_tokens(tokens['input_ids']))
+print("Masked sentence:\n", bert_tokenizer.convert_ids_to_tokens(mlm_tokens['input_ids'][0]))
+
+## Next sentence prediction (NSP): predicting the next sentence is the next of input sentence or not 
+# Inputs: 2 sentences. Output: 0=fake matched-up; 1=real matched-up)
+sentence1 = 'alice follows the white rabbit'
+sentence2 = 'follow the white rabbit neo'
+print("Bert tokenizing 2 sentences:\n", bert_tokenizer(sentence1, sentence2, return_tensors='pt')) # {'input_ids': [[101,5650,..]], 'token_type_ids':[[0,...,1]], 'attention_mask':[[1,...,1]]}
+print("Bert pooler at output:\n", bert_model.pooler) # BertPooler(dense, activation)
+
+## Bert outputs [batch, seq_len, hidden_dimension]
+# example: 1st sentence in our Training dataset
+sentence = train_dataset[0]['sentence'] # 'And, so far as they knew, they were quite right.'
+# {'input_ids':[[101,198,..,0,0]], 'token_type_ids':[[0,..,0]], 'attention_mask':[[1,1,..,0,0]]} 
+# => only 'input_ids' and 'attention_mask' are important (we have only 1 sentence=>'token_type_ids' only 1 value)
+tokens = bert_tokenizer(
+    sentence, padding='max_length', max_length=30, truncation=True, return_tensors='pt'
+)
+bert_model.eval()
+out = bert_model(
+    input_ids=tokens['input_ids'],
+    attention_mask=tokens['attention_mask'],
+    output_attentions=True,
+    output_hidden_states=True,
+    return_dict=True
+)
+print("Bert output keys: ", out.keys()) # ['last_hidden_state', 'pooler_output', 'hidden_states', 'attentions']
+last_hidden_batch = out['last_hidden_state']
+last_hidden_sentence = last_hidden_batch[0] # output full embeddings
+# remove [PAD] embeddings
+mask = tokens['attention_mask'].squeeze().bool()
+embeddings = last_hidden_sentence[mask]
+# remove 1st [CLS] & last [SEP]
+print("Good embeddings:\n", embeddings[1:-1])
+# flair library is doing the same
+print("Embedding of that sentence with flair:\n", get_embeddings(bert_flair, sentence))
