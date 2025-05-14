@@ -23,8 +23,9 @@ from gensim.parsing.preprocessing import *
 from gensim.utils import simple_preprocess
 from datasets import load_dataset, Split
 from textattack.augmentation import EmbeddingAugmenter
-from transformers import BertTokenizer
-from transformers import AutoModel, BertModel, AutoTokenizer, DataCollatorForLanguageModeling
+from transformers import BertTokenizer, Trainer, TrainingArguments, TextClassificationPipeline, pipeline
+from transformers import AutoModel, BertModel, AutoTokenizer, DataCollatorForLanguageModeling, DistilBertForSequenceClassification, AutoModelForSequenceClassification
+from transformers.pipelines import SUPPORTED_TASKS
 from flair.data import Sentence
 from flair.embeddings import ELMoEmbeddings 
 from flair.embeddings import WordEmbeddings # like Glove
@@ -123,17 +124,17 @@ def sentence_tokenize(source, quote_char='\\', sep_char=',', include_header=True
         new_fnames.append(new_fname)
     return sorted(new_fnames)
 
-new_fnames = sentence_tokenize(localfolder)
-print("New tokenized .csv files: ", new_fnames)
+# new_fnames = sentence_tokenize(localfolder)
+# print("New tokenized .csv files: ", new_fnames)
 
-## HuggingFace
-# Loading dataset
-dataset = load_dataset(
-    path='csv',
-    data_files=new_fnames,
-    quotechar='\\',
-    split=Split.TRAIN 
-)
+# ## HuggingFace
+# # Loading dataset
+# dataset = load_dataset(
+#     path='csv',
+#     data_files=new_fnames,
+#     quotechar='\\',
+#     split=Split.TRAIN 
+# )
 # print("Dataset columns: ", dataset.features) # {'sentence':'','source':''}
 # print("Dataset number of columns: ", dataset.num_columns)
 # print("Dataset shape: ", dataset.shape)
@@ -147,15 +148,15 @@ def is_alice_label(row):
     is_alice = int(row['source'] == 'alice28-1476.txt')
     return {'labels': is_alice}
 
-dataset = dataset.map(is_alice_label) # {'labels':1,'sentence':'xxx','source':'alice.txt'}
-print ("Dataset (added 'labels' column):\n", dataset)
-# dataset shuffle and train test split
-shuffled_dataset = dataset.shuffle(seed=42)
-split_dataset = shuffled_dataset.train_test_split(test_size=0.2)
-# {'train':Dataset(), 'test':Dataset()}; each is Dataset('features':['sentence','source','labels'], 'num_rows': 3081)
-print("Split dataset:\n", split_dataset) 
-train_dataset = split_dataset['train']
-test_dataset = split_dataset['test']
+# dataset = dataset.map(is_alice_label) # {'labels':1,'sentence':'xxx','source':'alice.txt'}
+# print ("Dataset (added 'labels' column):\n", dataset)
+# # dataset shuffle and train test split
+# shuffled_dataset = dataset.shuffle(seed=42)
+# split_dataset = shuffled_dataset.train_test_split(test_size=0.2)
+# # {'train':Dataset(), 'test':Dataset()}; each is Dataset('features':['sentence','source','labels'], 'num_rows': 3081)
+# print("Split dataset:\n", split_dataset) 
+# train_dataset = split_dataset['train']
+# test_dataset = split_dataset['test']
 
 # ## Word tokenization
 # sentence = "I'm following the white rabbit"
@@ -830,44 +831,181 @@ def tokenize_dataset(hf_dataset, sentence_field, label_field, tokenizer, **kwarg
     dataset = TensorDataset(token_ids, labels)
     return dataset 
 
-auto_tokenizer = AutoTokenizer.from_pretrained('distilbert-base-uncased')
-tokenizer_kwargs = dict(truncation=True, padding=True, max_length=30, add_special_tokens=True)
+# auto_tokenizer = AutoTokenizer.from_pretrained('distilbert-base-uncased')
+# tokenizer_kwargs = dict(truncation=True, padding=True, max_length=30, add_special_tokens=True)
 
-# Convert 'labels' column of Dataset() to float -> Dataset({features:['sentence','source','labels'], num_rows:3081})
-train_dataset_float = train_dataset.map(
-    lambda row: {'labels': [float(row['labels'])]}
-)
-test_dataset_float = test_dataset.map(
-    lambda row: {'labels': [float(row['labels'])]}
-)
+# # Convert 'labels' column of Dataset() to float -> Dataset({features:['sentence','source','labels'], num_rows:3081})
+# train_dataset_float = train_dataset.map(
+#     lambda row: {'labels': [float(row['labels'])]}
+# )
+# test_dataset_float = test_dataset.map(
+#     lambda row: {'labels': [float(row['labels'])]}
+# )
 
-train_tensor_dataset = tokenize_dataset(
-    train_dataset_float,
-    'sentence',
-    'labels',
-    auto_tokenizer,
-    **tokenizer_kwargs
-)
-test_tensor_dataset = tokenize_dataset(
-    test_dataset_float, 
-    'sentence',
-    'labels',
-    auto_tokenizer,
-    **tokenizer_kwargs
-)
-generator = torch.Generator()
-train_loader = DataLoader(
-    train_tensor_dataset, batch_size=4, shuffle=True, generator=generator
-)
-test_loader = DataLoader(test_tensor_dataset, batch_size=8)
+# train_tensor_dataset = tokenize_dataset(
+#     train_dataset_float,
+#     'sentence',
+#     'labels',
+#     auto_tokenizer,
+#     **tokenizer_kwargs
+# )
+# test_tensor_dataset = tokenize_dataset(
+#     test_dataset_float, 
+#     'sentence',
+#     'labels',
+#     auto_tokenizer,
+#     **tokenizer_kwargs
+# )
+# generator = torch.Generator()
+# train_loader = DataLoader(
+#     train_tensor_dataset, batch_size=4, shuffle=True, generator=generator
+# )
+# test_loader = DataLoader(test_tensor_dataset, batch_size=8)
 
-# Model config and training
-torch.manual_seed(41)
-bert_model = AutoModel.from_pretrained("distilbert-base-uncased")
-model = BERTClassifier(bert_model, 128, n_outputs=1)
-loss_fn = nn.BCEWithLogitsLoss()
-optimizer = optim.Adam(model.parameters(), lr=1e-5)
-sbs_bert = StepByStep(model, loss_fn, optimizer)
-sbs_bert.set_loaders(train_loader, test_loader)
-sbs_bert.train(1)
-print("Recall of Bert Classifier:\n", StepByStep.loader_apply(test_loader, sbs_bert.correct))
+# # Model config and training
+# torch.manual_seed(41)
+# bert_model = AutoModel.from_pretrained("distilbert-base-uncased")
+# model = BERTClassifier(bert_model, 128, n_outputs=1)
+# loss_fn = nn.BCEWithLogitsLoss()
+# optimizer = optim.Adam(model.parameters(), lr=1e-5)
+# sbs_bert = StepByStep(model, loss_fn, optimizer)
+# sbs_bert.set_loaders(train_loader, test_loader)
+# sbs_bert.train(1)
+# print("Recall of Bert Classifier:\n", StepByStep.loader_apply(test_loader, sbs_bert.correct))
+
+# ## Fine tuning with HuggingFace
+# torch.manual_seed(42)
+# bert_cls = DistilBertForSequenceClassification.from_pretrained(
+#     'distilbert-base-uncased', num_labels=2 
+# )
+# # auto_cls = AutoModelForSequenceClassification.from_pretrained(
+# #     'distilbert-base-uncased', num_labels=2
+# # )
+# auto_tokenizer = AutoTokenizer.from_pretrained(
+#     'distilbert-base-uncased'
+# )
+
+# def tokenize(row):
+#     return auto_tokenizer(
+#         row['sentence'], truncation=True, padding='max_length', max_length=30
+#     )
+
+# # Create new column on Dataset()
+# tokenized_train_dataset = train_dataset.map(
+#     tokenize, batched=True) # {'input_ids':[], 'attention_mask':[], 'labels': 0/1, 'sentence': '', 'source': ''}
+# tokenized_test_dataset = test_dataset.map(
+#     tokenize, batched=True) # {'input_ids':[], 'attention_mask':[], 'labels': 0/1, 'sentence': '', 'source': ''}
+# tokenized_train_dataset.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels'])
+# tokenized_test_dataset.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels'])
+# # Trainer
+# # trainer = Trainer(model=bert_cls, train_dataset=tokenized_train_dataset)
+# # print("Training arguments of HF:\n", trainer.args)
+# training_args = TrainingArguments(
+#     output_dir='output',
+#     num_train_epochs=1,
+#     per_device_train_batch_size=1,
+#     per_device_eval_batch_size=8, 
+#     eval_strategy='steps', # after 'eval_steps', or after 1 epoch if evaluation_strategy='epoch'
+#     eval_steps=300,
+#     logging_steps=300, # print training losses every 300 batches (observed as batch=8, but indeed 1 with gradient_accumulation_steps)
+#     gradient_accumulation_steps=8
+# )
+
+# eval_pred: EvalPred
+def compute_metrics(eval_pred):
+    predictions = eval_pred.predictions # [batch, num_classes]
+    predictions = eval_pred.predictions 
+    labels = eval_pred.label_ids # [batch,1]
+    predictions=np.argmax(predictions, axis=1)
+    return {'accuracy': (predictions==labels).mean()}
+
+# trainer = Trainer(
+#     model=bert_cls,
+#     args=training_args,
+#     train_dataset=tokenized_train_dataset, 
+#     eval_dataset=tokenized_test_dataset, 
+#     compute_metrics=compute_metrics)
+# trainer.train() # enter '3' if wandb asks
+# trainer.evaluate() # {"eval_loss":0.12, "eval_accuracy":0.96, "eval_runtime":0.9, "epoch":1,....}
+# trainer.save_model('bert_alice_vs_wizard')
+# os.listdir('bert_alice_vs_wizard') # ['training_args.bin', 'config.json', 'model.safetensors']
+# # load pretrained model and move to cuda
+# loaded_model = AutoModelForSequenceClassification.from_pretrained('bert_alice_vs_wizard')
+# print("Loaded model device: ", loaded_model.device)
+# device = 'cuda' if torch.cuda.is_available() else 'cpu'
+# loaded_model.to(device)
+# print("Model device: ", loaded_model.device)
+
+# # Prediction
+# sentence = 'Down the yellow brick rabbit hole'
+# # tokens: transformers.tokenization_utils_base.BatchEncoding; {'input_ids':[[101,203,..]], 'attention_mask':[[1,1,..]]} at cuda:0
+# tokens = auto_tokenizer(sentence, return_tensors='pt') 
+# tokens.to(loaded_model.device)
+# loaded_model.eval()
+# logits = loaded_model(
+#     input_ids=tokens['input_ids']
+# )
+# print("Logits: ", logits) # SequenceClassifierOutput(loss=None, logits=tensor([[2.3,4.5]]), device='cuda:0', hidden_states=None, attentions=None)
+# print("That sentence is of class: ", logits.logits.argmax(dim=1))
+
+# ## Pipeline
+# # device: cpu -1, gpu 0 1 2 ...
+# device_index = loaded_model.device.index if loaded_model.device.type != 'cpu' else -1
+# classifier = TextClassificationPipeline(
+#     model=loaded_model,
+#     tokenizer=auto_tokenizer, 
+#     device=device_index)
+# loaded_model.config.id2label = {0:'Wizard', 1:'Alice'}
+# print("Classify 2 sentences:\n", classifier(['Down the Yellow Brick Rabbit Hole', 'Alice rules!'])) # [{'label':'Wizard','score':0.99},{'label':'Alice','score':0.99}]
+
+# # Pipeline for sentiment analysis
+# sentiment = pipeline('sentiment-analysis') # TextClassificationPipeline
+# sentence = train_dataset[0]['sentence']
+# print("Sentiment Analysis:")
+# print(sentence)
+# print(sentiment(sentence)) # [{'label':'NEGATIVE','score':0.88}]
+# print("Supported tasks in pipeline: ", SUPPORTED_TASKS.keys()) # {'audio-classification':{}, 'text-generation':{}}
+
+# ## GPT-2
+# text_generator = pipeline("text-generation")
+# base_text = """
+#     Alice was beginning to get very tired of sitting by her sister on the bank, and of having nothing to do:  once or twice she had peeped into the book her sister was reading, but it had no pictures or conversations in it, `and what is the use of a book,'thought Alice `without pictures or conversation?' So she was considering in her own mind (as well as she could, for the hot day made her feel very sleepy and stupid), whether the pleasure of making a daisy-chain would be worth the trouble of getting up and picking the daisies, when suddenly a White Rabbit with pink eyes ran close by her.
+# """
+# print("GPT-2 sets do_sample=True to use 'beam search' instead of 'greedy coding': ", text_generator.model.config.task_specific_params)
+# result = text_generator(base_text, max_length=250)
+# print("Origin + generated text:\n", result[0]['generated_text'])
+
+## Putting it all together - using GPT-2
+# Data preparation
+dataset = load_dataset(
+    path='csv', data_files=['texts/alice28-1476.sent.csv'], quotechar='\\', split=Split.TRAIN)
+shuffled_dataset = dataset.shuffle(seed=42)
+split_dataset = shuffled_dataset.train_test_split(test_size=0.2, seed=42)
+train_dataset = split_dataset['train']
+test_dataset = split_dataset['test']
+# Note: use Byte-Pair Encoding (BPE); no padding, choosing only 'input_ids' and 'attention_mask' remains
+auto_tokenizer = AutoTokenizer.from_pretrained('gpt2')
+def tokenize(row):
+    return auto_tokenizer(row['sentence'])
+tokenized_train_dataset = train_dataset.map(
+    tokenize,
+    remove_columns=['source', 'sentence'], batched=True)
+tokenized_test_dataset = test_dataset.map(
+    tokenize, remove_columns=['source', 'sentence'], batched=True)
+print("Sentences have different lengths: ", list(map(len, tokenized_train_dataset[0:6]['input_ids'])))
+print(tokenized_train_dataset)
+def group_texts(examples, block_size=128):
+    # examples: 1 sentence of {'input_ids':[[]],'attention_mask':[[]]}
+    concatenated_examples = {
+        k: sum(examples[k], [])
+        for k in examples.keys()
+    }
+    result = {}
+    
+    return result
+
+lm_train_dataset = tokenized_train_dataset.map(
+    group_texts, batched=True
+)
+print("ABNC")
+print(lm_train_dataset)

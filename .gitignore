@@ -5,3 +5,5 @@ rps-test-set
 *.zip
 pretrained
 *.pth
+wandb
+tmp_trainer
