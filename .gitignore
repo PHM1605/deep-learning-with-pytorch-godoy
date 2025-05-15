@@ -7,3 +7,5 @@ pretrained
 *.pth
 wandb
 tmp_trainer
+bert_alice_vs_wizard
+output
