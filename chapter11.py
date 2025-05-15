@@ -23,7 +23,7 @@ from gensim.parsing.preprocessing import *
 from gensim.utils import simple_preprocess
 from datasets import load_dataset, Split
 from textattack.augmentation import EmbeddingAugmenter
-from transformers import BertTokenizer, Trainer, TrainingArguments, TextClassificationPipeline, pipeline
+from transformers import BertTokenizer, Trainer, TrainingArguments, TextClassificationPipeline, pipeline, AutoModelForCausalLM
 from transformers import AutoModel, BertModel, AutoTokenizer, DataCollatorForLanguageModeling, DistilBertForSequenceClassification, AutoModelForSequenceClassification
 from transformers.pipelines import SUPPORTED_TASKS
 from flair.data import Sentence
@@ -968,9 +968,9 @@ def compute_metrics(eval_pred):
 
 # ## GPT-2
 # text_generator = pipeline("text-generation")
-# base_text = """
-#     Alice was beginning to get very tired of sitting by her sister on the bank, and of having nothing to do:  once or twice she had peeped into the book her sister was reading, but it had no pictures or conversations in it, `and what is the use of a book,'thought Alice `without pictures or conversation?' So she was considering in her own mind (as well as she could, for the hot day made her feel very sleepy and stupid), whether the pleasure of making a daisy-chain would be worth the trouble of getting up and picking the daisies, when suddenly a White Rabbit with pink eyes ran close by her.
-# """
+base_text = """
+    Alice was beginning to get very tired of sitting by her sister on the bank, and of having nothing to do:  once or twice she had peeped into the book her sister was reading, but it had no pictures or conversations in it, `and what is the use of a book,'thought Alice `without pictures or conversation?' So she was considering in her own mind (as well as she could, for the hot day made her feel very sleepy and stupid), whether the pleasure of making a daisy-chain would be worth the trouble of getting up and picking the daisies, when suddenly a White Rabbit with pink eyes ran close by her.
+"""
 # print("GPT-2 sets do_sample=True to use 'beam search' instead of 'greedy coding': ", text_generator.model.config.task_specific_params)
 # result = text_generator(base_text, max_length=250)
 # print("Origin + generated text:\n", result[0]['generated_text'])
@@ -987,25 +987,79 @@ test_dataset = split_dataset['test']
 auto_tokenizer = AutoTokenizer.from_pretrained('gpt2')
 def tokenize(row):
     return auto_tokenizer(row['sentence'])
+
+# tokenized_train_dataset: process batch-by-batch but concatenate at the end to create 1 big list of all sentences
+# {'input_ids': [[],[],..], 'attention_mask':[[],[],..]}
 tokenized_train_dataset = train_dataset.map(
     tokenize,
     remove_columns=['source', 'sentence'], batched=True)
 tokenized_test_dataset = test_dataset.map(
     tokenize, remove_columns=['source', 'sentence'], batched=True)
 print("Sentences have different lengths: ", list(map(len, tokenized_train_dataset[0:6]['input_ids'])))
-print(tokenized_train_dataset)
+
 def group_texts(examples, block_size=128):
-    # examples: 1 sentence of {'input_ids':[[]],'attention_mask':[[]]}
+    # examples: 1 batch; { 'input_ids':[[],[],..], 'attention_mask':[[],[],..] }
+    # sum([[],[],..], []) -> flatten to []
+    # concatenated_examples: {'input_ids':[..], 'attention_mask':[..]}; tokens' ids of all words in whole batch
     concatenated_examples = {
         k: sum(examples[k], [])
         for k in examples.keys()
     }
-    result = {}
-    
+    total_length = len(
+        concatenated_examples[list(examples.keys())[0]]) # list(examples.keys())[0] = 'input_ids'
+    total_length = (total_length//block_size)*block_size # truncate the leftover words from grouping process
+
+    # result: {'input_ids': [[],[],..], 'attention_mask': [[],[],..]}
+    # each sub_array ([]) has same size of 128 tokens
+    result = {
+        k: [t[i:i+block_size] for i in range(0,total_length, block_size)]
+        for k,t in concatenated_examples.items() # k='input_ids'/'attention_mask', t=[..]/[..]
+    }
+    # result: {'input_ids': [[],[],..], 'attention_mask': [[],[],..], 'labels': [[],[],..]}
+    result['labels'] = result['input_ids'].copy()    
     return result
 
+# lm_train_dataset: {'input_ids': [[],[],..], 'attention_mask': [[],[],..], 'labels': [[],[],..]}
+# containing all 'blocks' (each 128 tokens) from the whole train_dataset
 lm_train_dataset = tokenized_train_dataset.map(
     group_texts, batched=True
 )
-print("ABNC")
-print(lm_train_dataset)
+lm_test_dataset = tokenized_test_dataset.map(
+    group_texts, batched=True
+)
+lm_train_dataset.set_format(type='torch')
+lm_test_dataset.set_format(type='torch')
+print("Tokens in ONE block:")
+print(lm_train_dataset[0]['input_ids'])
+print("Number of blocks in training dataset:\n", len(lm_train_dataset))
+print("Number of blocks in test dataset:\n", len(lm_test_dataset))
+
+# Model configuration and training
+model = AutoModelForCausalLM.from_pretrained('gpt2')
+model.resize_token_embeddings(len(auto_tokenizer)) # if we add special-tokens to tokenizer, add this
+training_args = TrainingArguments(
+    output_dir='output',
+    num_train_epochs=1,
+    per_device_train_batch_size=1,
+    per_device_eval_batch_size=8,
+    eval_strategy='steps',
+    eval_steps=50,
+    logging_steps=50,
+    gradient_accumulation_steps=4,
+    prediction_loss_only=True # for generating text, we don't need accuracy, only loss
+)
+trainer = Trainer(
+    model=model, args=training_args, train_dataset=lm_train_dataset, eval_dataset=lm_test_dataset
+)
+print("GPT2 evaluate: ", trainer.evaluate())
+
+# Generating text
+device_index = (model.device.index if model.device.type!='cpu' else -1)
+gpt2_gen = pipeline(
+    'text-generation',
+    model=model,
+    tokenizer=auto_tokenizer,
+    device=device_index
+)
+result = gpt2_gen(base_text, max_length=250)
+print("GPT2 generated text:\n", result[0]['generated_text'])
