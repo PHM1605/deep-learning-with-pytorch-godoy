@@ -1,7 +1,23 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from sklearn.linear_model import LinearRegression
 
 plt.style.use('fivethirtyeight')
+
+# fits a linear regression to find the actual b and w that minimize the loss 
+def fit_model(x_train, y_train):
+    regression = LinearRegression()
+    regression.fit(x_train, y_train)
+    b_minimum, w_minimum = regression.intercept_[0], regression.coef_[0][0]
+    return b_minimum, w_minimum
+
+# find the closest indexes for the updated b and w in their respective ranges
+# bs: column has same elements; ws: row has same elements
+def find_index(b, w, bs, ws):
+    b_idx = np.argmin(np.abs(bs[0,:] - b))
+    w_idx = np.argmin(np.abs(ws[:,0] - w))
+    fixedb, fixedw = bs[0, b_idx], ws[w_idx, 0]
+    return b_idx, w_idx, fixedb, fixedw
 
 def figure1(x_train, y_train, x_val, y_val):
     fig, ax = plt.subplots(1, 2, figsize=(12,6))
@@ -48,3 +64,21 @@ def figure3(x_train, y_train, b, w):
     ax.annotate(r'$error_0$', xy=(0.8, 1.5))
     fig.tight_layout()
     return fig, ax
+
+def figure4(x_train, y_train, b, w, bs, ws, all_losses):
+    b_minimum, w_minimum = fit_model(x_train, y_train) 
+    figure = plt.figure(figsize=(12,6))
+    # 1st plot
+    ax1 = figure.add_subplot(1, 2, 1, projection='3d')
+    ax1.set_xlabel('b')
+    ax1.set_ylabel('w')
+    ax1.set_title('Loss Surface')
+    surf = ax1.plot_surface(bs, ws, all_losses, rstride=1, cstride=1, alpha=0.5, cmap=plt.cm.jet, linewidth=0, antialiased=True)
+    ax1.contour(bs[0,:], ws[:,0], all_losses, 10, offset=-1, cmap=plt.cm.jet)
+    # find minimum location
+    bidx, widx, _, _ = find_index(b_minimum, w_minimum, bs, ws)
+    ax1.scatter(b_minimum, w_minimum, all_losses[bidx, widx], c='k')
+    ax1.text(0.3, 1.5, all_losses[bidx, widx], "Minimum", zdir=(1,0,0))
+    figure.tight_layout()
+    return figure, (ax1)
+    
